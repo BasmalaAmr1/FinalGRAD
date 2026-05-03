@@ -160,8 +160,18 @@ const Reports = () => {
     
     // City filter
     if (selectedCity !== 'all') {
-      filteredProjects = filteredProjects.filter(proj => proj.location?.city === selectedCity);
-      const projectIds = new Set(filteredProjects.map(p => p.id));
+      filteredProjects = filteredProjects.filter(proj => {
+        // Handle both string and object location formats
+        let projectCity = 'Unknown';
+        if (typeof proj.location === 'string') {
+          const parts = proj.location.split(',');
+          projectCity = parts[0].trim();
+        } else if (proj.location?.city) {
+          projectCity = proj.location.city;
+        }
+        return projectCity === selectedCity;
+      });
+      const projectIds = new Set(filteredProjects.map(p => p._id));
       filteredApplications = filteredApplications.filter(app => projectIds.has(app.projectId));
     }
     
@@ -198,7 +208,17 @@ const Reports = () => {
 
   // Get unique cities for filter
   const getUniqueCities = () => {
-    const cities = [...new Set(reportData.projects.map(proj => proj.location?.city).filter(Boolean))];
+    const cities = [...new Set(reportData.projects.map(proj => {
+      // Handle both string and object location formats
+      if (typeof proj.location === 'string') {
+        // Extract city from string like "Cairo, Egypt" or just "Alex"
+        const parts = proj.location.split(',');
+        return parts[0].trim();
+      } else if (proj.location?.city) {
+        return proj.location.city;
+      }
+      return 'Unknown';
+    }).filter(city => city !== 'Unknown'))];
     return cities.sort();
   };
 
@@ -231,7 +251,14 @@ const Reports = () => {
     const cityData = {};
     
     reportData.projects.forEach(proj => {
-      const city = proj.location?.city || 'Unknown';
+      // Handle both string and object location formats
+      let city = 'Unknown';
+      if (typeof proj.location === 'string') {
+        const parts = proj.location.split(',');
+        city = parts[0].trim();
+      } else if (proj.location?.city) {
+        city = proj.location.city;
+      }
       cityData[city] = (cityData[city] || 0) + 1;
     });
     
@@ -248,26 +275,62 @@ const Reports = () => {
       if (type === 'applications') {
         headers = ['Application ID', 'Applicant Name', 'Project Name', 'Status', 'Submission Date'];
         csvData = data.map(app => {
-          const user = reportData.users.find(u => u.id === app.userId);
-          const project = reportData.projects.find(p => p.id === app.projectId);
+          // Find user by matching email, phone, or nationalId since userId is not available
+          const user = reportData.users.find(u => 
+            u.email === app.email || 
+            u.phone === app.phone || 
+            u.nationalId === app.nationalId
+          );
+          const project = reportData.projects.find(p => p._id === app.projectId);
           return [
-            app.id,
-            user?.name || 'Unknown',
-            project?.name || 'Unknown',
+            app._id,
+            user?.name || app.name || 'Unknown',
+            project?.name || app.projectName || 'Unknown',
             app.status,
-            new Date(app.submittedAt).toLocaleDateString()
+            new Date(app.createdAt).toLocaleDateString()
           ];
         });
         filename = `applications-report-${new Date().toISOString().split('T')[0]}.csv`;
       } else if (type === 'projects') {
         headers = ['Project Name', 'Location', 'Available Units', 'Sold Units', 'Progress %'];
-        csvData = data.map(proj => [
-          proj.name,
-          `${proj.location?.city || 'Unknown'}, ${proj.location?.district || 'Unknown'}`,
-          proj.development?.availableUnits || 0,
-          proj.development?.soldUnits || 0,
-          proj.timeline?.constructionProgress || 0
-        ]);
+        csvData = data.map(proj => {
+          // Handle both string and object location formats
+          let locationDisplay = 'Unknown';
+          if (typeof proj.location === 'string') {
+            locationDisplay = proj.location;
+          } else if (proj.location?.city) {
+            locationDisplay = `${proj.location.city}, ${proj.location.district || 'Unknown'}`;
+          }
+          
+          // Calculate units correctly
+          const totalUnits = proj.totalUnits || 0;
+          const availableUnits = proj.availableUnits || 0;
+          const soldUnits = Math.max(0, totalUnits - availableUnits);
+          
+          // Calculate progress based on status
+          let progressValue = 0;
+          switch (proj.status) {
+            case 'completed':
+              progressValue = 100;
+              break;
+            case 'active':
+              progressValue = 60;
+              break;
+            case 'planning':
+              progressValue = 20;
+              break;
+            default:
+              progressValue = 0;
+          }
+          
+          return [
+            proj.name,
+            locationDisplay,
+            availableUnits,
+            soldUnits,
+            `${progressValue}% (${proj.status || 'Unknown'})`
+          ];
+        });
         filename = `projects-report-${new Date().toISOString().split('T')[0]}.csv`;
       }
 
@@ -369,10 +432,10 @@ const Reports = () => {
                 value={selectedPeriod}
                 onChange={(e) => setSelectedPeriod(e.target.value)}
               >
-                <option value="all">All Time</option>
-                <option value="7days">Last 7 Days</option>
-                <option value="30days">Last 30 Days</option>
-                <option value="90days">Last 90 Days</option>
+                <option key="all" value="all">All Time</option>
+                <option key="7days" value="7days">Last 7 Days</option>
+                <option key="30days" value="30days">Last 30 Days</option>
+                <option key="90days" value="90days">Last 90 Days</option>
               </select>
             </div>
             <div className="col-md-3">
@@ -382,9 +445,9 @@ const Reports = () => {
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
               >
-                <option value="all">All Projects</option>
+                <option key="all" value="all">All Projects</option>
                 {reportData.projects.map(proj => (
-                  <option key={proj.id} value={proj.id}>{proj.name}</option>
+                  <option key={proj._id || proj.id} value={proj._id || proj.id}>{proj.name}</option>
                 ))}
               </select>
             </div>
@@ -395,7 +458,7 @@ const Reports = () => {
                 value={selectedCity}
                 onChange={(e) => setSelectedCity(e.target.value)}
               >
-                <option value="all">All Cities</option>
+                <option key="all" value="all">All Cities</option>
                 {getUniqueCities().map(city => (
                   <option key={city} value={city}>{city}</option>
                 ))}
@@ -408,10 +471,10 @@ const Reports = () => {
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
               >
-                <option value="all">All Status</option>
-                <option value="approved">Approved</option>
-                <option value="pending">Pending</option>
-                <option value="rejected">Rejected</option>
+                <option key="all" value="all">All Status</option>
+                <option key="approved" value="approved">Approved</option>
+                <option key="pending" value="pending">Pending</option>
+                <option key="rejected" value="rejected">Rejected</option>
               </select>
             </div>
           </div>
@@ -730,13 +793,18 @@ const Reports = () => {
                     </thead>
                     <tbody>
                       {filteredApplications.map(app => {
-                        const user = reportData.users.find(u => u.id === app.userId);
-                        const project = reportData.projects.find(p => p.id === app.projectId);
+                        // Find user by matching email, phone, or nationalId since userId is not available
+                        const user = reportData.users.find(u => 
+                          u.email === app.email || 
+                          u.phone === app.phone || 
+                          u.nationalId === app.nationalId
+                        );
+                        const project = reportData.projects.find(p => p._id === app.projectId);
                         return (
-                          <tr key={app.id}>
-                            <td><small className="font-monospace">{app.id?.slice(-8)}</small></td>
-                            <td>{user?.name || 'Unknown'}</td>
-                            <td>{project?.name || 'Unknown'}</td>
+                          <tr key={app._id}>
+                            <td><small className="font-monospace">{app._id?.slice(-8)}</small></td>
+                            <td>{user?.name || app.name || 'Unknown'}</td>
+                            <td>{project?.name || app.projectName || 'Unknown'}</td>
                             <td>
                               <span className={`badge bg-${
                                 app.status === 'approved' ? 'success' :
@@ -784,25 +852,60 @@ const Reports = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredProjects.map(proj => (
-                        <tr key={proj.id}>
-                          <td>{proj.name}</td>
-                          <td><small>{proj.location?.city || 'Unknown'}</small></td>
-                          <td>{proj.development?.availableUnits || 0}</td>
-                          <td>{proj.development?.soldUnits || 0}</td>
-                          <td>
-                            <div className="d-flex align-items-center">
-                              <div className="progress flex-grow-1 me-2" style={{ height: '6px' }}>
-                                <div 
-                                  className="progress-bar bg-success" 
-                                  style={{ width: `${proj.timeline?.constructionProgress || 0}%` }}
-                                ></div>
+                      {filteredProjects.map(proj => {
+                        // Handle both string and object location formats
+                        let locationDisplay = 'Unknown';
+                        if (typeof proj.location === 'string') {
+                          locationDisplay = proj.location;
+                        } else if (proj.location?.city) {
+                          locationDisplay = proj.location.city;
+                        }
+                        
+                        // Calculate units correctly
+                        const totalUnits = proj.totalUnits || 0;
+                        const availableUnits = proj.availableUnits || 0;
+                        const soldUnits = Math.max(0, totalUnits - availableUnits);
+                        
+                        // Calculate progress based on status
+                        let progressValue = 0;
+                        let progressClass = 'bg-secondary';
+                        switch (proj.status) {
+                          case 'completed':
+                            progressValue = 100;
+                            progressClass = 'bg-success';
+                            break;
+                          case 'active':
+                            progressValue = 60;
+                            progressClass = 'bg-primary';
+                            break;
+                          case 'planning':
+                            progressValue = 20;
+                            progressClass = 'bg-warning';
+                            break;
+                          default:
+                            progressValue = 0;
+                        }
+                        
+                        return (
+                          <tr key={proj._id}>
+                            <td>{proj.name}</td>
+                            <td><small>{locationDisplay}</small></td>
+                            <td>{availableUnits}</td>
+                            <td>{soldUnits}</td>
+                            <td>
+                              <div className="d-flex align-items-center">
+                                <div className="progress flex-grow-1 me-2" style={{ height: '6px' }}>
+                                  <div 
+                                    className={`progress-bar ${progressClass}`} 
+                                    style={{ width: `${progressValue}%` }}
+                                  ></div>
+                                </div>
+                                <small>{progressValue}%</small>
                               </div>
-                              <small>{proj.timeline?.constructionProgress || 0}%</small>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

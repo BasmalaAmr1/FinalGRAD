@@ -44,8 +44,10 @@ export const applicationsAPI = {
     return apiCall(`/applications/${id}`);
   },
 
-  // Update application status (approve/reject)
+  // Update application status
   updateStatus: async (id, statusData) => {
+    console.log('🔍 Updating application status at endpoint: /applications/${id}/status');
+    console.log('🔍 Status data being sent:', JSON.stringify(statusData, null, 2));
     return apiCall(`/applications/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify(statusData),
@@ -146,6 +148,13 @@ export const usersAPI = {
       body: JSON.stringify(userData),
     });
   },
+
+  // Delete user
+  delete: async (id) => {
+    return apiCall(`/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 
 // Audit Logs API
@@ -186,6 +195,72 @@ export const dashboardAPI = {
   // Get system health
   getHealth: async () => {
     return apiCall('/dashboard/health');
+  },
+};
+
+// Notifications API
+export const notificationsAPI = {
+  // Get all notifications
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const url = queryString ? `/notifications?${queryString}` : '/notifications';
+    return apiCall(url);
+  },
+
+  // Get single notification by ID
+  getById: async (id) => {
+    return apiCall(`/notifications/${id}`);
+  },
+
+  // Create new notification
+  create: async (notificationData) => {
+    return apiCall('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(notificationData),
+    });
+  },
+
+  // Update notification
+  update: async (id, notificationData) => {
+    return apiCall(`/notifications/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(notificationData),
+    });
+  },
+
+  // Delete notification
+  delete: async (id) => {
+    return apiCall(`/notifications/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Mark notification as read
+  markAsRead: async (id) => {
+    return apiCall(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    });
+  },
+
+  // Mark all notifications as read for a user
+  markAllAsRead: async (targetUserId) => {
+    return apiCall('/notifications/mark-all-read', {
+      method: 'PATCH',
+      body: JSON.stringify({ targetUserId }),
+    });
+  },
+
+  // Get unread notifications count
+  getUnreadCount: async (targetUserId) => {
+    const queryString = new URLSearchParams({ targetUserId }).toString();
+    return apiCall(`/notifications/unread-count?${queryString}`);
+  },
+
+  // Delete expired notifications
+  deleteExpired: async () => {
+    return apiCall('/notifications/cleanup-expired', {
+      method: 'DELETE',
+    });
   },
 };
 

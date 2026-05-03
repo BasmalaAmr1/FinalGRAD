@@ -370,7 +370,7 @@ class DataService {
 
   // Get user by ID
   getUser(userId) {
-    return this.cache.users.find(user => user.id === userId);
+    return this.cache.users.find(user => user._id === userId);
   }
 
   // Get user by ID (alias for getUser)
@@ -516,31 +516,128 @@ class DataService {
   }
 
   // Update user
-  updateUser(userId, userData) {
-    const userIndex = this.cache.users.findIndex(user => user.id === userId);
-    
-    if (userIndex === -1) {
-      throw new Error('User not found');
+  async updateUser(userId, userData) {
+    try {
+      // Update via backend API
+      const response = await fetch(`${this.apiBaseUrl}/users/${userId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const updatedUser = result.data;
+          
+          // Update cache with the response from backend
+          const userIndex = this.cache.users.findIndex(user => user._id === userId);
+          if (userIndex !== -1) {
+            this.cache.users[userIndex] = updatedUser;
+            this.saveToStorage();
+            this.notifySubscribers('user_updated', updatedUser);
+            
+            // Add audit log
+            this.addAuditLog({
+              action: 'user_updated',
+              userId: userId,
+              userName: updatedUser.name,
+              details: `User ${userId} updated: ${JSON.stringify(userData)}`
+            });
+          }
+          
+          return updatedUser;
+        }
+      } else {
+        throw new Error('Failed to update user in backend');
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      throw error;
     }
+  }
 
-    this.cache.users[userIndex] = {
-      ...this.cache.users[userIndex],
-      ...userData,
-      updatedAt: new Date().toISOString()
-    };
+  // Delete user
+  async deleteUser(userId) {
+    try {
+      // Delete from backend API
+      const response = await fetch(`${this.apiBaseUrl}/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
-    this.saveToStorage();
-    this.notifySubscribers('user_updated', this.cache.users[userIndex]);
-    
-    // Add audit log
-    this.addAuditLog({
-      action: 'user_updated',
-      userId: userId,
-      userName: this.cache.users[userIndex].name,
-      details: `User ${userId} updated: ${JSON.stringify(userData)}`
-    });
-    
-    return this.cache.users[userIndex];
+      if (response.ok) {
+        // Remove from cache
+        const userIndex = this.cache.users.findIndex(user => user.id === userId);
+        if (userIndex !== -1) {
+          const deletedUser = this.cache.users[userIndex];
+          this.cache.users.splice(userIndex, 1);
+          
+          this.saveToStorage();
+          this.notifySubscribers('user_deleted', deletedUser);
+          
+          // Add audit log
+          this.addAuditLog({
+            action: 'user_deleted',
+            userId: userId,
+            userName: deletedUser.name,
+            details: `User ${userId} deleted`
+          });
+          
+          return deletedUser;
+        }
+      } else {
+        throw new Error('Failed to delete user from backend');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      throw error;
+    }
+  }
+
+  // Add new user
+  async addUser(userData) {
+    try {
+      // Add to backend API
+      const response = await fetch(`${this.apiBaseUrl}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          const newUser = result.data;
+          
+          // Add to cache
+          this.cache.users.push(newUser);
+          this.saveToStorage();
+          this.notifySubscribers('user_added', newUser);
+          
+          // Add audit log
+          this.addAuditLog({
+            action: 'user_added',
+            userId: newUser._id || newUser.id,
+            userName: newUser.name,
+            details: `User ${newUser.name} added`
+          });
+          
+          return newUser;
+        }
+      } else {
+        throw new Error('Failed to add user to backend');
+      }
+    } catch (error) {
+      console.error('Error adding user:', error);
+      throw error;
+    }
   }
 
   // Delete project from real database
@@ -762,27 +859,96 @@ class DataService {
     return [...this.cache.notifications];
   }
 
+  // Load notifications from API
+  async loadNotificationsFromAPI() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/notifications`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.cache.notifications = result.data;
+          console.log('✅ Notifications loaded from API:', result.data.length, 'notifications');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load notifications from API:', error);
+    }
+  }
+
   // Mark notification as read
-  markNotificationRead(notificationId) {
-    const notificationIndex = this.cache.notifications.findIndex(notif => notif.id === notificationId);
-    if (notificationIndex !== -1) {
-      this.cache.notifications[notificationIndex].isRead = true;
-      this.cache.notifications[notificationIndex].read = true;
-      this.saveToStorage();
-      this.notifySubscribers('notification_read', this.cache.notifications[notificationIndex]);
+  async markNotificationRead(notificationId) {
+    try {
+      // Update via backend API
+      const response = await fetch(`${this.apiBaseUrl}/notifications/${notificationId}/read`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Update cache with the response from backend
+          const notificationIndex = this.cache.notifications.findIndex(notif => notif._id === notificationId);
+          if (notificationIndex !== -1) {
+            this.cache.notifications[notificationIndex].isRead = true;
+            this.saveToStorage();
+            this.notifySubscribers('notification_read', this.cache.notifications[notificationIndex]);
+          }
+          return result.data;
+        }
+      } else {
+        throw new Error('Failed to mark notification as read in backend');
+      }
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      // Fallback to local update
+      const notificationIndex = this.cache.notifications.findIndex(notif => notif._id === notificationId);
+      if (notificationIndex !== -1) {
+        this.cache.notifications[notificationIndex].isRead = true;
+        this.saveToStorage();
+        this.notifySubscribers('notification_read', this.cache.notifications[notificationIndex]);
+      }
+      throw error;
     }
   }
 
   // Delete notification
-  deleteNotification(notificationId) {
-    const notificationIndex = this.cache.notifications.findIndex(notif => notif.id === notificationId);
-    if (notificationIndex !== -1) {
-      const deletedNotification = this.cache.notifications.splice(notificationIndex, 1)[0];
-      this.saveToStorage();
-      this.notifySubscribers('notification_deleted', deletedNotification);
-      return deletedNotification;
+  async deleteNotification(notificationId) {
+    try {
+      // Delete via backend API
+      const response = await fetch(`${this.apiBaseUrl}/notifications/${notificationId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Remove from cache
+          const notificationIndex = this.cache.notifications.findIndex(notif => notif._id === notificationId);
+          if (notificationIndex !== -1) {
+            const deletedNotification = this.cache.notifications.splice(notificationIndex, 1)[0];
+            this.saveToStorage();
+            this.notifySubscribers('notification_deleted', deletedNotification);
+            return deletedNotification;
+          }
+        }
+      } else {
+        throw new Error('Failed to delete notification from backend');
+      }
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      // Fallback to local deletion
+      const notificationIndex = this.cache.notifications.findIndex(notif => notif._id === notificationId);
+      if (notificationIndex !== -1) {
+        const deletedNotification = this.cache.notifications.splice(notificationIndex, 1)[0];
+        this.saveToStorage();
+        this.notifySubscribers('notification_deleted', deletedNotification);
+        return deletedNotification;
+      }
+      return null;
     }
-    return null;
   }
 
   // Test function to verify addApplication works correctly

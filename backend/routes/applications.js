@@ -87,4 +87,14 @@ router.put('/:id/status', [
         .withMessage('Reviewed by must be a string')
 ], applicationController.updateApplicationStatus);
 
+// @route   DELETE /api/applications/:id
+// @desc    Delete application
+// @access  Public
+router.delete('/:id', applicationController.deleteApplication);
+
+// @route   PUT /api/applications/:id
+// @desc    Update application
+// @access  Public
+router.put('/:id', applicationController.updateApplication);
+
 module.exports = router;

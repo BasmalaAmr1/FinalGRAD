@@ -67,8 +67,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Database connection - MongoDB only (no fallback)
-const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/housing_system';
+// Database connection - MongoDB Atlas
+const mongoUri = process.env.MONGODB_URI || 'mongodb://sbasmalaibrahim_db_user:basmala123@ac-euwdhug-shard-00-00.z7jzimi.mongodb.net:27017,ac-euwdhug-shard-00-01.z7jzimi.mongodb.net:27017,ac-euwdhug-shard-00-02.z7jzimi.mongodb.net:27017/housing_system?replicaSet=atlas-d1h5pd-shard-0&ssl=true&authSource=admin';
 
 // Connect to MongoDB with proper error handling
 mongoose.connect(mongoUri, {
@@ -91,8 +91,8 @@ mongoose.connection.on('error', (error) => {
 });
 
 mongoose.connection.on('disconnected', () => {
-    console.log(' MongoDB disconnected');
-    process.exit(1);
+    console.log(' MongoDB disconnected - attempting to reconnect...');
+    // Don't exit, let mongoose handle reconnection
 });
 
 mongoose.connection.on('reconnected', () => {

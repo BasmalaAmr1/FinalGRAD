@@ -77,7 +77,13 @@ const ReviewApplication = () => {
       setUpdateLoading(true);
       setUpdateError('');
       
-      await applicationsAPI.update(id, { status: 'approved' });
+      const statusData = {
+        status: 'approved',
+        reviewedBy: 'Admin'
+      };
+      
+      console.log('🔍 Approving application with data:', statusData);
+      await applicationsAPI.updateStatus(id, statusData);
       setSuccessMessage('Application approved successfully!');
       
       // Update local state
@@ -85,6 +91,7 @@ const ReviewApplication = () => {
         setApplication({ ...application, status: 'approved' });
       }
     } catch (err) {
+      console.error('❌ Error approving application:', err);
       setUpdateError('Failed to approve application');
     } finally {
       setUpdateLoading(false);
@@ -102,7 +109,14 @@ const ReviewApplication = () => {
       setUpdateLoading(true);
       setUpdateError('');
       
-      await applicationsAPI.update(id, { status: 'rejected', rejectionReason: rejectReason });
+      const statusData = {
+        status: 'rejected',
+        reviewedBy: 'Admin',
+        rejectionReason: rejectReason
+      };
+      
+      console.log('🔍 Rejecting application with data:', statusData);
+      await applicationsAPI.updateStatus(id, statusData);
       setSuccessMessage('Application rejected successfully!');
       setShowRejectReason(false);
       
@@ -111,6 +125,7 @@ const ReviewApplication = () => {
         setApplication({ ...application, status: 'rejected', rejectionReason: rejectReason });
       }
     } catch (err) {
+      console.error('❌ Error rejecting application:', err);
       setUpdateError('Failed to reject application');
     } finally {
       setUpdateLoading(false);

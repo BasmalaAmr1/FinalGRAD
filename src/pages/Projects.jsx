@@ -253,35 +253,17 @@ const Projects = () => {
 
       const newStatus = project.status === 'active' ? 'completed' : 'active';
       
-      // Update project in state and localStorage
-      const updatedProjects = projectsList.map(p => 
-        p._id === projectId 
-          ? { ...p, status: newStatus }
-          : p
-      );
-      setProjectsList(updatedProjects);
-      saveProjectsToStorage(updatedProjects);
+      console.log(`🔄 Toggling project ${project.name} status from ${project.status} to ${newStatus}`);
+      
+      // Update project using API service
+      await projectsAPI.update(projectId, { ...project, status: newStatus });
+      console.log('✅ Project status updated in MongoDB');
+      
+      // Refresh projects list from API to get updated data
+      await fetchProjects();
       
       alert(`Project status changed to ${newStatus}!`);
       
-      // Try API call but don't fail if it doesn't work
-      try {
-        const response = await fetch(`http://localhost:5000/api/projects/${projectId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ...project, status: newStatus })
-        });
-
-        if (response.ok) {
-          console.log('✅ Status updated on backend');
-        } else {
-          console.log('⚠️ Backend update failed but localStorage updated');
-        }
-      } catch (apiError) {
-        console.log('⚠️ Backend update failed but localStorage updated:', apiError.message);
-      }
     } catch (err) {
       console.error('Error updating project status:', err);
       alert('Failed to update project status');
@@ -469,51 +451,66 @@ const Projects = () => {
               <div className="modal-body">
                 <div className="row g-3">
                   <div className="col-md-6">
-                    <label className="form-label">Project Name</label>
+                    <label htmlFor="projectName" className="form-label">Project Name</label>
                     <input
                       type="text"
+                      id="projectName"
+                      name="projectName"
                       className="form-control"
                       value={formData.name}
                       onChange={(e) => setFormData({...formData, name: e.target.value})}
                       placeholder="Enter project name"
+                      autoComplete="organization-title"
                     />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label">Location (City)</label>
+                    <label htmlFor="projectLocation" className="form-label">Location (City)</label>
                     <input
                       type="text"
+                      id="projectLocation"
+                      name="projectLocation"
                       className="form-control"
                       value={formData.location || ''}
                       onChange={(e) => setFormData({...formData, location: e.target.value})}
                       placeholder="Enter city"
+                      autoComplete="address-level2"
                     />
                   </div>
                   <div className="col-md-4">
-                    <label className="form-label">Total Units</label>
+                    <label htmlFor="totalUnits" className="form-label">Total Units</label>
                     <input
                       type="number"
+                      id="totalUnits"
+                      name="totalUnits"
                       className="form-control"
                       value={formData.totalUnits || ''}
                       onChange={(e) => setFormData({...formData, totalUnits: parseInt(e.target.value) || 0})}
                       placeholder="0"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="col-md-4">
-                    <label className="form-label">Available Units</label>
+                    <label htmlFor="availableUnits" className="form-label">Available Units</label>
                     <input
                       type="number"
+                      id="availableUnits"
+                      name="availableUnits"
                       className="form-control"
                       value={formData.availableUnits || ''}
                       onChange={(e) => setFormData({...formData, availableUnits: parseInt(e.target.value) || 0})}
                       placeholder="0"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="col-md-4">
-                    <label className="form-label">Type</label>
+                    <label htmlFor="projectType" className="form-label">Type</label>
                     <select
+                      id="projectType"
+                      name="projectType"
                       className="form-select"
                       value={formData.type}
                       onChange={(e) => setFormData({...formData, type: e.target.value})}
+                      autoComplete="off"
                     >
                       <option value="Apartments">Apartments</option>
                       <option value="Villas">Villas</option>
@@ -521,44 +518,56 @@ const Projects = () => {
                     </select>
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label">Price Range</label>
+                    <label htmlFor="priceRange" className="form-label">Price Range</label>
                     <input
                       type="text"
+                      id="priceRange"
+                      name="priceRange"
                       className="form-control"
                       value={formData.priceRange || ''}
                       onChange={(e) => setFormData({...formData, priceRange: e.target.value})}
                       placeholder="e.g., 1M - 3M EGP"
+                      autoComplete="off"
                     />
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label">Status</label>
+                    <label htmlFor="projectStatus" className="form-label">Status</label>
                     <select
+                      id="projectStatus"
+                      name="projectStatus"
                       className="form-select"
                       value={formData.status}
                       onChange={(e) => setFormData({...formData, status: e.target.value})}
+                      autoComplete="off"
                     >
                       <option value="active">Active</option>
-                      <option value="completed">Completed</option>
                       <option value="planning">Planning</option>
+                      <option value="completed">Completed</option>
                     </select>
                   </div>
                   <div className="col-md-6">
-                    <label className="form-label">Completion Date</label>
+                    <label htmlFor="completionDate" className="form-label">Completion Date</label>
                     <input
                       type="date"
+                      id="completionDate"
+                      name="completionDate"
                       className="form-control"
                       value={formData.completionDate || ''}
                       onChange={(e) => setFormData({...formData, completionDate: e.target.value})}
+                      autoComplete="off"
                     />
                   </div>
                   <div className="col-12">
-                    <label className="form-label">Description</label>
+                    <label htmlFor="projectDescription" className="form-label">Description</label>
                     <textarea
+                      id="projectDescription"
+                      name="projectDescription"
                       className="form-control"
                       rows="3"
                       value={formData.description}
                       onChange={(e) => setFormData({...formData, description: e.target.value})}
                       placeholder="Enter project description"
+                      autoComplete="off"
                     ></textarea>
                   </div>
                 </div>

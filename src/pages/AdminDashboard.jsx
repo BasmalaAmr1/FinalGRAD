@@ -178,9 +178,13 @@ const AdminDashboard = () => {
     
     // Subscribe to API data changes for real-time updates
     const unsubscribe = apiDataManager.subscribe((data) => {
-      console.log('Dashboard received API data change, reloading...');
-      // Reload dashboard data
-      loadDashboardData();
+      console.log('Dashboard received API data change:', data.type);
+      // Only reload if it's relevant data change (not dashboard's own data loading)
+      if (data.type && data.type !== 'dashboard_loaded') {
+        console.log('Reloading dashboard due to relevant data change...');
+        // Reload dashboard data
+        loadDashboardData();
+      }
     });
     
     // Set up auto-refresh every 30 seconds for real-time feel

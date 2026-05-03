@@ -13,12 +13,13 @@ const Notifications = () => {
   });
 
   // Load notifications
-  const loadNotifications = () => {
+  const loadNotifications = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Use real data service
+      // Load notifications from API
+      await dataService.loadNotificationsFromAPI();
       const notificationsData = dataService.getNotifications();
       console.log('Notifications loaded:', notificationsData);
       setNotifications(notificationsData);
@@ -55,21 +56,21 @@ const Notifications = () => {
   });
 
   // Mark notification as read
-  const markAsRead = (notificationId) => {
+  const markAsRead = async (notificationId) => {
     try {
-      dataService.markNotificationRead(notificationId);
-      loadNotifications(); // Reload to update the UI
+      await dataService.markNotificationRead(notificationId);
+      await loadNotifications(); // Reload to update the UI
     } catch (err) {
       setError('Failed to mark notification as read');
     }
   };
 
   // Delete notification
-  const deleteNotification = (notificationId) => {
+  const deleteNotification = async (notificationId) => {
     if (window.confirm('Are you sure you want to delete this notification?')) {
       try {
-        dataService.deleteNotification(notificationId);
-        loadNotifications();
+        await dataService.deleteNotification(notificationId);
+        await loadNotifications();
       } catch (err) {
         setError('Failed to delete notification');
       }
@@ -77,12 +78,13 @@ const Notifications = () => {
   };
 
   // Mark all as read
-  const markAllAsRead = () => {
+  const markAllAsRead = async () => {
     try {
-      filteredNotifications
-        .filter(n => !n.isRead)
-        .forEach(n => dataService.markNotificationRead(n.id));
-      loadNotifications(); // Reload to update the UI
+      const unreadNotifications = filteredNotifications.filter(n => !n.isRead);
+      for (const notification of unreadNotifications) {
+        await dataService.markNotificationRead(notification._id);
+      }
+      await loadNotifications(); // Reload to update the UI
     } catch (err) {
       setError('Failed to mark all notifications as read');
     }
@@ -236,7 +238,7 @@ const Notifications = () => {
                 <tbody>
                   {filteredNotifications.map((notification) => (
                     <tr 
-                      key={notification.id}
+                      key={notification._id}
                       className={!notification.isRead ? 'table-active' : ''}
                     >
                       <td>
@@ -289,7 +291,7 @@ const Notifications = () => {
                           {!notification.isRead && (
                             <button
                               className="btn btn-outline-primary"
-                              onClick={() => markAsRead(notification.id)}
+                              onClick={() => markAsRead(notification._id)}
                               title="Mark as read"
                             >
                               <i className="bi bi-check"></i>
@@ -297,7 +299,7 @@ const Notifications = () => {
                           )}
                           <button
                             className="btn btn-outline-danger"
-                            onClick={() => deleteNotification(notification.id)}
+                            onClick={() => deleteNotification(notification._id)}
                             title="Delete notification"
                           >
                             <i className="bi bi-trash"></i>

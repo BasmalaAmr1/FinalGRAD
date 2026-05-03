@@ -66,15 +66,19 @@ const NewApplication = () => {
     if (name === 'projectName') {
       const selectedProject = projects.find(project => project.name === value);
       console.log('🔍 Selected project:', selectedProject);
-      console.log('🔍 Available projects:', projects.map(p => ({ name: p.name, id: p.id })));
+      console.log('🔍 Available projects:', projects.map(p => ({ name: p.name, id: p.id, _id: p._id })));
       
       if (selectedProject) {
+        // Try different ID field names that might be in the project object
+        const projectId = selectedProject.id || selectedProject._id || selectedProject.projectId;
+        console.log('🔍 Found projectId:', projectId);
+        
         setFormData(prev => ({
           ...prev,
-          projectId: selectedProject.id
+          projectId: projectId
         }));
-        console.log('🔍 Set projectId to:', selectedProject.id);
-        console.log('🔍 Form data after project selection:', { ...formData, projectId: selectedProject.id });
+        console.log('🔍 Set projectId to:', projectId);
+        console.log('🔍 Form data after project selection:', { ...formData, projectId: projectId });
       } else {
         console.log('❌ Project not found with name:', value);
         setError('Please select a valid project from the list');
@@ -89,15 +93,18 @@ const NewApplication = () => {
   const validateForm = () => {
     const required = ['applicantName', 'nationalId', 'applicantEmail', 'applicantPhone', 'projectName', 'projectId', 'income', 'familySize', 'currentHousing'];
     
+    console.log('🔍 Validating form with data:', formData);
+    
     for (const field of required) {
       if (!formData[field] || formData[field].trim() === '') {
+        console.log(`❌ Validation failed for field: ${field}, value:`, formData[field]);
         setError(`${field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')} is required`);
         return false;
       }
     }
 
     // Debug: Log form data
-    console.log('🔍 Form data validation:', formData);
+    console.log('✅ All required fields passed validation:', formData);
 
     // Name validation (3-100 characters)
     if (formData.applicantName.length < 3 || formData.applicantName.length > 100) {
@@ -274,8 +281,9 @@ const NewApplication = () => {
               <div className="card-body">
                 <div className="row">
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Full Name *</label>
+                    <label htmlFor="applicantName" className="form-label">Full Name *</label>
                     <input
+                      id="applicantName"
                       type="text"
                       className="form-control"
                       name="applicantName"
@@ -286,8 +294,9 @@ const NewApplication = () => {
                     />
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">National ID *</label>
+                    <label htmlFor="nationalId" className="form-label">National ID *</label>
                     <input
+                      id="nationalId"
                       type="text"
                       className="form-control"
                       name="nationalId"
@@ -299,8 +308,9 @@ const NewApplication = () => {
                     />
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Email Address *</label>
+                    <label htmlFor="applicantEmail" className="form-label">Email Address *</label>
                     <input
+                      id="applicantEmail"
                       type="email"
                       className="form-control"
                       name="applicantEmail"
@@ -311,8 +321,9 @@ const NewApplication = () => {
                     />
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Phone Number *</label>
+                    <label htmlFor="applicantPhone" className="form-label">Phone Number *</label>
                     <input
+                      id="applicantPhone"
                       type="tel"
                       className="form-control"
                       name="applicantPhone"
@@ -334,16 +345,17 @@ const NewApplication = () => {
               <div className="card-body">
                 <div className="row">
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Preferred Project *</label>
+                    <label htmlFor="projectName" className="form-label">Preferred Project *</label>
                     {projects.length > 0 ? (
                       <select
+                        id="projectName"
                         className="form-control"
                         name="projectName"
                         value={formData.projectName}
                         onChange={handleInputChange}
                         required
                       >
-                        <option value="">Select a project</option>
+                        <option key="default" value="">Select a project</option>
                         {projects.map(project => (
                           <option key={project.id} value={project.name}>
                             {project.name}
@@ -358,8 +370,9 @@ const NewApplication = () => {
                     )}
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Requested Unit Type</label>
+                    <label htmlFor="requestedUnitType" className="form-label">Requested Unit Type</label>
                     <select
+                      id="requestedUnitType"
                       className="form-control"
                       name="requestedUnitType"
                       value={formData.requestedUnitType}
@@ -372,8 +385,9 @@ const NewApplication = () => {
                     </select>
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Preferred Floor</label>
+                    <label htmlFor="preferredFloor" className="form-label">Preferred Floor</label>
                     <select
+                      id="preferredFloor"
                       className="form-control"
                       name="preferredFloor"
                       value={formData.preferredFloor}
@@ -390,8 +404,9 @@ const NewApplication = () => {
                     </select>
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Payment Method</label>
+                    <label htmlFor="paymentMethod" className="form-label">Payment Method</label>
                     <select
+                      id="paymentMethod"
                       className="form-control"
                       name="paymentMethod"
                       value={formData.paymentMethod}
@@ -413,8 +428,9 @@ const NewApplication = () => {
               <div className="card-body">
                 <div className="row">
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Monthly Income (EGP) *</label>
+                    <label htmlFor="income" className="form-label">Monthly Income (EGP) *</label>
                     <input
+                      id="income"
                       type="number"
                       className="form-control"
                       name="income"
@@ -427,8 +443,9 @@ const NewApplication = () => {
                     />
                   </div>
                   <div className="col-md-6 mb-3">
-                    <label className="form-label">Family Size *</label>
+                    <label htmlFor="familySize" className="form-label">Family Size *</label>
                     <input
+                      id="familySize"
                       type="number"
                       className="form-control"
                       name="familySize"
@@ -450,8 +467,9 @@ const NewApplication = () => {
               </div>
               <div className="card-body">
                 <div className="mb-3">
-                  <label className="form-label">Current Housing Situation *</label>
+                  <label htmlFor="currentHousing" className="form-label">Current Housing Situation *</label>
                   <textarea
+                    id="currentHousing"
                     className="form-control"
                     name="currentHousing"
                     value={formData.currentHousing}

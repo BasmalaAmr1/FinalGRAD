@@ -40,6 +40,15 @@ const userSchema = new mongoose.Schema({
         enum: ['citizen', 'admin'],
         default: 'citizen'
     },
+    department: {
+        type: String,
+        default: 'General'
+    },
+    status: {
+        type: String,
+        enum: ['active', 'inactive'],
+        default: 'active'
+    },
     isVerified: {
         type: Boolean,
         default: false
@@ -51,6 +60,10 @@ const userSchema = new mongoose.Schema({
     passwordResetExpires: {
         type: Date,
         select: false
+    },
+    lastLogin: {
+        type: Date,
+        default: Date.now
     },
     profile: {
         address: {

@@ -10,14 +10,12 @@ const applicationSchema = new mongoose.Schema({
     nationalId: {
         type: String,
         required: [true, 'National ID is required'],
-        unique: true,
         trim: true,
         match: [/^[0-9]{14}$/, 'National ID must be exactly 14 digits']
     },
     email: {
         type: String,
         required: [true, 'Email is required'],
-        unique: true,
         trim: true,
         lowercase: true,
         match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please enter a valid email']

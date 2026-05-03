@@ -1,4 +1,4 @@
-import { applicationsAPI, projectsAPI, usersAPI, auditLogsAPI, dashboardAPI } from '../services/apiService';
+import { applicationsAPI, projectsAPI, usersAPI, auditLogsAPI, dashboardAPI, notificationsAPI } from '../services/apiService';
 
 class ApiDataManager {
   constructor() {
@@ -8,6 +8,7 @@ class ApiDataManager {
       projects: null,
       users: null,
       auditLogs: null,
+      notifications: null,
       lastUpdate: null
     };
     this.cacheTimeout = 30000; // 30 seconds cache
@@ -39,18 +40,19 @@ class ApiDataManager {
       projects: this.cache.projects || [],
       users: this.cache.users || [],
       auditLogs: this.cache.auditLogs || [],
-      notifications: []
+      notifications: this.cache.notifications || []
     };
   }
 
   // Refresh all data from API
   async refreshData() {
     try {
-      const [applicationsRes, projectsRes, usersRes, auditLogsRes] = await Promise.all([
+      const [applicationsRes, projectsRes, usersRes, auditLogsRes, notificationsRes] = await Promise.all([
         applicationsAPI.getAll({ limit: 1000 }),
         projectsAPI.getAll(),
         usersAPI.getAll(),
-        auditLogsAPI.getAll({ limit: 100 })
+        auditLogsAPI.getAll({ limit: 100 }),
+        notificationsAPI.getAll()
       ]);
 
       this.cache = {
@@ -58,6 +60,7 @@ class ApiDataManager {
         projects: projectsRes.data || [],
         users: usersRes.data || [],
         auditLogs: auditLogsRes.data || [],
+        notifications: notificationsRes.data || [],
         lastUpdate: Date.now()
       };
 
@@ -133,6 +136,71 @@ class ApiDataManager {
         ...log,
         id: log._id || log.id
       }));
+  }
+
+  // Get notifications
+  async getNotifications() {
+    if (!this.isCacheValid()) {
+      await this.refreshData();
+    }
+    
+    return (this.cache.notifications || []).map(notification => ({
+      ...notification,
+      id: notification._id || notification.id
+    }));
+  }
+
+  // Load notifications from API (for Notifications page)
+  async loadNotificationsFromAPI() {
+    try {
+      const response = await notificationsAPI.getAll();
+      this.cache.notifications = response.data || [];
+      this.cache.lastUpdate = Date.now();
+      this.notifyListeners();
+      return this.cache.notifications;
+    } catch (error) {
+      console.error('Error loading notifications from API:', error);
+      throw error;
+    }
+  }
+
+  // Mark notification as read
+  async markNotificationRead(notificationId) {
+    try {
+      await notificationsAPI.markAsRead(notificationId);
+      
+      // Update cache
+      if (this.cache.notifications) {
+        const notification = this.cache.notifications.find(n => n._id === notificationId);
+        if (notification) {
+          notification.isRead = true;
+        }
+      }
+      
+      this.notifyListeners();
+      return true;
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      throw error;
+    }
+  }
+
+  // Delete notification
+  async deleteNotification(notificationId) {
+    try {
+      await notificationsAPI.delete(notificationId);
+      
+      // Update cache
+      if (this.cache.notifications) {
+        this.cache.notifications = this.cache.notifications.filter(n => n._id !== notificationId);
+      }
+      
+      this.notifyListeners();
+      return true;
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+      throw error;
+    }
   }
 
   // Get application by ID with enriched data

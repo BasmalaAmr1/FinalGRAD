@@ -46,11 +46,31 @@ const Applications = () => {
       const enrichedApplications = applicationsData.map(app => {
         const project = projectsData.find(p => p._id === app.projectId || p.id === app.projectId);
         
+        // Enhanced name handling with better fallbacks
+        let applicantName = 'Unknown User';
+        if (app.applicantName && app.applicantName.trim() !== '') {
+          applicantName = app.applicantName.trim();
+        } else if (app.name && app.name.trim() !== '') {
+          applicantName = app.name.trim();
+        } else if (app.email) {
+          // Use email as fallback if name is missing
+          const emailName = app.email.split('@')[0];
+          applicantName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        }
+        
+        // Enhanced project name handling
+        let projectName = 'Unknown Project';
+        if (app.projectName && app.projectName.trim() !== '') {
+          projectName = app.projectName.trim();
+        } else if (project && project.name && project.name.trim() !== '') {
+          projectName = project.name.trim();
+        }
+        
         const enriched = {
           ...app,
           id: app._id || app.id,
-          projectName: app.projectName || (project ? project.name : 'Unknown Project'),
-          applicantName: app.applicantName || app.name || 'Unknown User',
+          projectName: projectName,
+          applicantName: applicantName,
           submittedDate: app.createdAt || app.submittedDate || new Date().toISOString(),
           // Include unit type, preferred floor, and payment method with defaults
           requestedUnitType: app.requestedUnitType || '2BR',
@@ -58,7 +78,7 @@ const Applications = () => {
           paymentMethod: app.paymentMethod || 'installments'
         };
         
-        console.log(`📋 App: ${enriched.applicantName} -> Project: ${enriched.projectName} (projectId: ${app.projectId})`);
+        console.log(`📋 App: ${enriched.applicantName} -> Project: ${enriched.projectName} (ID: ${enriched.id})`);
         
         return enriched;
       });
@@ -164,12 +184,15 @@ const Applications = () => {
     setUpdatingId(appId);
     
     try {
-      // Use API service to update status
-      const updateData = {
+      // Use API service to update status with the correct endpoint
+      const statusData = {
         status: newStatus,
-        rejectionReason: reason
+        reviewedBy: 'Admin',
+        rejectionReason: reason || null
       };
-      await applicationsAPI.update(appId, updateData);
+      
+      console.log('🔍 Updating application status:', statusData);
+      await applicationsAPI.updateStatus(appId, statusData);
       
       // Update local state for immediate UI feedback
       const updatedApplications = applications.map(app => 
@@ -177,31 +200,10 @@ const Applications = () => {
       );
       setApplications(updatedApplications);
       
-      console.log('Application status updated successfully:', newStatus);
-      
-      // Try to sync with backend (optional)
-      try {
-        const response = await fetch(`http://localhost:5000/api/applications/${appId}/status`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ 
-            status: newStatus,
-            reviewedBy: 'Admin',
-            rejectionReason: reason || null
-          })
-        });
-
-        if (response.ok) {
-          console.log('Status also synced with backend');
-        }
-      } catch (backendError) {
-        console.log('Backend sync failed, but data service update worked');
-      }
+      console.log('✅ Application status updated successfully:', newStatus);
 
     } catch (error) {
-      console.error('Error updating application:', error);
+      console.error('❌ Error updating application:', error);
       setError('Failed to update application status');
       // Revert the change if there was an error
       fetchApplications();

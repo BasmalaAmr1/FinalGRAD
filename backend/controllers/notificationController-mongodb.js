@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Notification = require('../models/Notification');
 const { validationResult } = require('express-validator');
 
@@ -6,55 +7,24 @@ const { validationResult } = require('express-validator');
 // @access  Public
 exports.getAllNotifications = async (req, res) => {
     try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
-        const targetUserId = req.query.targetUserId;
-        const isRead = req.query.isRead;
-        const priority = req.query.priority;
-        const category = req.query.category;
-
-        // Build query
-        let query = {};
+        console.log('🔍 getAllNotifications called!');
         
-        if (targetUserId) {
-            query.targetUserId = targetUserId;
-        }
+        // Simple approach - get all notifications
+        const notifications = await Notification.find({}).sort({ createdAt: -1 }).limit(50);
+        console.log(`📊 Found ${notifications.length} notifications`);
         
-        if (isRead !== undefined) {
-            query.isRead = isRead === 'true';
-        }
-        
-        if (priority && ['low', 'medium', 'high', 'urgent'].includes(priority)) {
-            query.priority = priority;
-        }
-        
-        if (category && ['applications', 'projects', 'users', 'system', 'maintenance'].includes(category)) {
-            query.category = category;
-        }
-
-        // Exclude expired notifications
-        query.$or = [
-            { expiresAt: { $exists: false } },
-            { expiresAt: { $gt: new Date() } }
-        ];
-
-        const notifications = await Notification.find(query)
-            .sort({ createdAt: -1 })
-            .limit(limit * 1)
-            .skip((page - 1) * limit);
-
-        const total = await Notification.countDocuments(query);
-
+        // Return the data
         res.status(200).json({
             success: true,
             count: notifications.length,
-            total,
-            page,
-            pages: Math.ceil(total / limit),
+            total: notifications.length,
+            page: 1,
+            pages: 1,
             data: notifications
         });
+        
     } catch (error) {
-        console.error('Error in getAllNotifications:', error);
+        console.error('❌ Error in getAllNotifications:', error);
         res.status(500).json({
             success: false,
             message: 'Error fetching notifications',

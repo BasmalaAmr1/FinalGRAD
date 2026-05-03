@@ -7,11 +7,13 @@ const Roles = () => {
   const [error, setError] = useState(null);
 
   // Load users using data service
-  const loadUsers = () => {
+  const loadUsers = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      // Wait for dataService to load users from API
+      await dataService.loadInitialData();
       const usersData = dataService.getUsers();
       console.log('Loading users from data service:', usersData.length);
       setUsers(usersData);
@@ -23,18 +25,9 @@ const Roles = () => {
     }
   };
 
-  // Setup data service subscription and initial load
+  // Setup initial data load only
   useEffect(() => {
     loadUsers();
-    
-    // Subscribe to data changes for live updates
-    const unsubscribe = dataService.subscribe((changeType, data, cache) => {
-      console.log('Roles received data change:', changeType);
-      // Always refetch to ensure data consistency
-      loadUsers();
-    });
-    
-    return () => unsubscribe();
   }, []);
 
   const [showAddModal, setShowAddModal] = useState(false);
@@ -42,11 +35,11 @@ const Roles = () => {
   const [newUser, setNewUser] = useState({
     name: '',
     email: '',
-    role: 'Reviewer',
+    role: 'citizen',
     department: ''
   });
 
-  const handleToggleStatus = (userId) => {
+  const handleToggleStatus = async (userId) => {
     try {
       // Get current user data and toggle status
       const currentUser = dataService.getUserById(userId);
@@ -54,10 +47,12 @@ const Roles = () => {
         const newStatus = currentUser.status === 'active' ? 'inactive' : 'active';
         
         // Update using dataService
-        const updatedUser = dataService.updateUser(userId, { ...currentUser, status: newStatus });
+        const updatedUser = await dataService.updateUser(userId, { ...currentUser, status: newStatus });
         if (updatedUser) {
           console.log('User status updated successfully:', updatedUser);
           alert('User status toggled successfully!');
+          // Reload users to show updated status
+          await loadUsers();
         } else {
           console.error('Failed to update user status');
           alert('Failed to update user status');
@@ -80,14 +75,16 @@ const Roles = () => {
     setShowAddModal(true);
   };
 
-  const handleDeleteUser = (userId) => {
+  const handleDeleteUser = async (userId) => {
     if (window.confirm('Are you sure you want to delete this user?')) {
       try {
         // Delete using dataService
-        const deletedUser = dataService.deleteUser(userId);
+        const deletedUser = await dataService.deleteUser(userId);
         if (deletedUser) {
           console.log('User deleted successfully:', deletedUser);
           alert('User deleted successfully!');
+          // Reload users to show updated list
+          await loadUsers();
         } else {
           console.error('Failed to delete user');
           alert('Failed to delete user');
@@ -99,7 +96,7 @@ const Roles = () => {
     }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.department) {
       alert('Please fill in all required fields');
       return;
@@ -108,10 +105,12 @@ const Roles = () => {
     try {
       if (editingUser) {
         // Update existing user using dataService
-        const updatedUser = dataService.updateUser(editingUser.id, { ...editingUser, ...newUser });
+        const updatedUser = await dataService.updateUser(editingUser._id, { ...editingUser, ...newUser });
         if (updatedUser) {
           console.log('User updated successfully:', updatedUser);
           alert('User updated successfully!');
+          // Reload users to show updated data
+          await loadUsers();
         } else {
           console.error('Failed to update user');
           alert('Failed to update user');
@@ -120,28 +119,33 @@ const Roles = () => {
         // Add new user using dataService
         const userToAdd = {
           ...newUser,
-          id: Date.now().toString(),
+          phone: '01200000000', // Default phone number
+          nationalId: '30000000000000', // Default national ID
+          password: 'password123', // Default password
           status: 'active',
           lastLogin: new Date().toISOString(),
           createdAt: new Date().toISOString(),
           isVerified: false
         };
-        const addedUser = dataService.addUser(userToAdd);
+        const addedUser = await dataService.addUser(userToAdd);
         if (addedUser) {
           console.log('User added successfully:', addedUser);
           alert('User added successfully!');
+          // Reload users to show new user
+          await loadUsers();
         } else {
           console.error('Failed to add user');
           alert('Failed to add user');
         }
       }
       
-      setShowAddModal(false);
+      // Reset form and close modal
+      setNewUser({ name: '', email: '', role: 'citizen', department: '' });
       setEditingUser(null);
-      setNewUser({ name: '', email: '', role: 'Reviewer', department: '' });
+      setShowAddModal(false);
     } catch (err) {
-      console.error('Error saving user:', err);
-      alert('Error saving user');
+      console.error('Error adding/updating user:', err);
+      alert('Error adding/updating user');
     }
   };
 
@@ -201,7 +205,7 @@ const Roles = () => {
           className="btn btn-primary" 
           onClick={() => {
             setEditingUser(null);
-            setNewUser({ name: '', email: '', role: 'Reviewer', department: '' });
+            setNewUser({ name: '', email: '', role: 'citizen', department: '' });
             setShowAddModal(true);
           }}
         >
@@ -234,7 +238,7 @@ const Roles = () => {
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.id}>
+                  <tr key={user._id}>
                     <td>
                       <div className="d-flex align-items-center">
                         <div className="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
@@ -265,7 +269,7 @@ const Roles = () => {
                         <button 
                           type="button"
                           className={`btn btn-sm ${user.status === 'active' ? 'btn-outline-warning' : 'btn-outline-success'}`}
-                          onClick={() => handleToggleStatus(user.id)}
+                          onClick={() => handleToggleStatus(user._id)}
                           title={user.status === 'active' ? 'Deactivate User' : 'Activate User'}
                         >
                           <i className={`bi ${user.status === 'active' ? 'bi-pause' : 'bi-play'}`}></i>
@@ -274,7 +278,7 @@ const Roles = () => {
                           type="button"
                           className="btn btn-sm btn-outline-danger"
                           title="Delete User"
-                          onClick={() => handleDeleteUser(user.id)}
+                          onClick={() => handleDeleteUser(user._id)}
                         >
                           <i className="bi bi-trash"></i>
                         </button>
@@ -363,45 +367,54 @@ const Roles = () => {
               </div>
               <div className="modal-body">
                 <div className="mb-3">
-                  <label className="form-label">Full Name</label>
+                  <label htmlFor="newUserFullName" className="form-label">Full Name</label>
                   <input
                     type="text"
+                    id="newUserFullName"
+                    name="fullName"
                     className="form-control"
                     value={newUser.name}
                     onChange={(e) => setNewUser({...newUser, name: e.target.value})}
                     placeholder="Enter full name"
+                    autoComplete="name"
                   />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Email Address</label>
+                  <label htmlFor="newUserEmail" className="form-label">Email Address</label>
                   <input
                     type="email"
+                    id="newUserEmail"
+                    name="email"
                     className="form-control"
                     value={newUser.email}
                     onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                     placeholder="Enter email address"
+                    autoComplete="email"
                   />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Department</label>
+                  <label htmlFor="newUserDepartment" className="form-label">Department</label>
                   <input
                     type="text"
+                    id="newUserDepartment"
+                    name="department"
                     className="form-control"
                     value={newUser.department}
                     onChange={(e) => setNewUser({...newUser, department: e.target.value})}
                     placeholder="Enter department"
+                    autoComplete="organization"
                   />
                 </div>
                 <div className="mb-3">
-                  <label className="form-label">Role</label>
                   <select
                     className="form-select"
+                    id="newUserRole"
+                    name="role"
                     value={newUser.role}
-                    onChange={(e) => setNewUser({...newUser, role: e.target.value})}
+                    onChange={(e) => setNewUser({...newUser, role: e.target.value.toLowerCase()})}
                   >
-                    <option value="Admin">Admin</option>
-                    <option value="Reviewer">Reviewer</option>
-                    <option value="Viewer">Viewer</option>
+                    <option value="admin">Admin</option>
+                    <option value="citizen">Citizen</option>
                   </select>
                 </div>
               </div>

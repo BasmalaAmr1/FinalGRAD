@@ -7,7 +7,7 @@ const { validationResult } = require('express-validator');
 exports.getAllApplications = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 50;
         const status = req.query.status;
         const search = req.query.search;
 
@@ -26,12 +26,19 @@ exports.getAllApplications = async (req, res) => {
             ];
         }
 
+        // Add debugging to track query execution
+        console.log('🔍 API Query:', JSON.stringify(query, null, 2));
+        console.log('🔍 Pagination - Page:', page, 'Limit:', limit);
+
         const applications = await Application.find(query)
             .sort({ createdAt: -1 })
             .limit(limit * 1)
             .skip((page - 1) * limit);
 
         const total = await Application.countDocuments(query);
+
+        console.log('📊 API Results:', applications.length, 'applications found');
+        console.log('📊 Total Count:', total);
 
         res.status(200).json({
             success: true,
