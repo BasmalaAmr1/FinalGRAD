@@ -17,7 +17,7 @@
       }
     },
     {
-      "id": "user_002", 
+      "id": "user_002",
       "name": "Fatma Ali Khalil",
       "email": "fatma.khalil@email.com",
       "phone": "01123456789",
@@ -35,7 +35,7 @@
     {
       "id": "user_003",
       "name": "Omar Abdel Rahman",
-      "email": "omar.abdel@email.com", 
+      "email": "omar.abdel@email.com",
       "phone": "01098765432",
       "nationalId": "29812345678903",
       "role": "citizen",
@@ -52,7 +52,7 @@
       "id": "user_004",
       "name": "Mona Mahmoud Ali",
       "email": "mona.mahmoud@email.com",
-      "phone": "01287654321", 
+      "phone": "01287654321",
       "nationalId": "29212345678904",
       "role": "citizen",
       "isVerified": true,
@@ -101,7 +101,11 @@
       },
       "pricing": {
         "priceRange": "2.5M - 4.5M EGP",
-        "unitTypes": ["2BR", "3BR", "4BR"],
+        "unitTypes": [
+          "2BR",
+          "3BR",
+          "4BR"
+        ],
         "downPayment": "10%",
         "installmentYears": 8
       },
@@ -111,7 +115,13 @@
         "constructionProgress": 85
       },
       "features": {
-        "amenities": ["Swimming Pool", "Gym", "Security", "Parking", "Kids Area"],
+        "amenities": [
+          "Swimming Pool",
+          "Gym",
+          "Security",
+          "Parking",
+          "Kids Area"
+        ],
         "areaRange": "120 - 240 sqm",
         "floors": 12
       },
@@ -136,7 +146,11 @@
       },
       "pricing": {
         "priceRange": "3.8M - 7.2M EGP",
-        "unitTypes": ["3BR", "4BR", "Penthouse"],
+        "unitTypes": [
+          "3BR",
+          "4BR",
+          "Penthouse"
+        ],
         "downPayment": "15%",
         "installmentYears": 10
       },
@@ -146,7 +160,13 @@
         "constructionProgress": 60
       },
       "features": {
-        "amenities": ["Sea View", "Private Beach", "Spa", "Concierge", "Underground Parking"],
+        "amenities": [
+          "Sea View",
+          "Private Beach",
+          "Spa",
+          "Concierge",
+          "Underground Parking"
+        ],
         "areaRange": "180 - 350 sqm",
         "floors": 25
       },
@@ -171,7 +191,13 @@
       },
       "pricing": {
         "priceRange": "1.8M - 5.5M EGP",
-        "unitTypes": ["Studio", "1BR", "2BR", "3BR", "Office"],
+        "unitTypes": [
+          "Studio",
+          "1BR",
+          "2BR",
+          "3BR",
+          "Office"
+        ],
         "downPayment": "5%",
         "installmentYears": 12
       },
@@ -181,7 +207,13 @@
         "constructionProgress": 15
       },
       "features": {
-        "amenities": ["Smart City", "Metro Access", "Central Park", "Shopping Mall", "Business Center"],
+        "amenities": [
+          "Smart City",
+          "Metro Access",
+          "Central Park",
+          "Shopping Mall",
+          "Business Center"
+        ],
         "areaRange": "65 - 300 sqm",
         "floors": 35
       },
@@ -206,7 +238,11 @@
       },
       "pricing": {
         "priceRange": "2.2M - 3.8M EGP",
-        "unitTypes": ["Townhouse", "Twin House", "Villa"],
+        "unitTypes": [
+          "Townhouse",
+          "Twin House",
+          "Villa"
+        ],
         "downPayment": "20%",
         "installmentYears": 7
       },
@@ -216,7 +252,12 @@
         "constructionProgress": 95
       },
       "features": {
-        "amenities": ["Private Garden", "Community Center", "Sports Club", "24/7 Security"],
+        "amenities": [
+          "Private Garden",
+          "Community Center",
+          "Sports Club",
+          "24/7 Security"
+        ],
         "areaRange": "200 - 400 sqm",
         "floors": 3
       },
@@ -241,7 +282,11 @@
       },
       "pricing": {
         "priceRange": "850K - 1.5M EGP",
-        "unitTypes": ["1BR", "2BR", "3BR"],
+        "unitTypes": [
+          "1BR",
+          "2BR",
+          "3BR"
+        ],
         "downPayment": "25%",
         "installmentYears": 15
       },
@@ -251,7 +296,12 @@
         "constructionProgress": 40
       },
       "features": {
-        "amenities": ["Public Transport", "Schools", "Healthcare", "Shopping Center"],
+        "amenities": [
+          "Public Transport",
+          "Schools",
+          "Healthcare",
+          "Shopping Center"
+        ],
         "areaRange": "75 - 150 sqm",
         "floors": 8
       },
@@ -276,7 +326,7 @@
       },
       "documents": {
         "nationalIdCopy": "uploaded",
-        "incomeCertificate": "uploaded", 
+        "incomeCertificate": "uploaded",
         "birthCertificate": "uploaded",
         "marriageCertificate": "uploaded",
         "bankStatements": "uploaded"
@@ -399,7 +449,7 @@
       "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       "details": "System administrator logged into the housing management system"
     },
-        {
+    {
       "id": "audit_005",
       "userId": "user_005",
       "userName": "System Administrator",
@@ -622,7 +672,14 @@
         }
       ],
       "maxFileSize": 5242880,
-      "allowedFileTypes": ["pdf", "jpg", "jpeg", "png", "doc", "docx"]
+      "allowedFileTypes": [
+        "pdf",
+        "jpg",
+        "jpeg",
+        "png",
+        "doc",
+        "docx"
+      ]
     },
     "approvalCriteria": {
       "incomeToUnitRatio": {
@@ -671,9 +728,15 @@
     "reportingSettings": {
       "autoGenerateReports": true,
       "reportFrequency": "monthly",
-      "reportRecipients": ["admin@housing.gov.eg"],
+      "reportRecipients": [
+        "admin@housing.gov.eg"
+      ],
       "includeCharts": true,
-      "exportFormats": ["pdf", "excel", "csv"]
+      "exportFormats": [
+        "pdf",
+        "excel",
+        "csv"
+      ]
     }
   }
 }

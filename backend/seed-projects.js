@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 const Project = require('./models/Project');
 
+// MongoDB connection
+const mongoUri = 'mongodb+srv://Gov_admin:password%40123@findoorcluster0.gzhcjts.mongodb.net/gov_system';
+
 const seedProjects = async () => {
     try {
         // Clear existing projects
@@ -80,7 +83,7 @@ const seedProjects = async () => {
 };
 
 // Connect and seed
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/findoor')
+mongoose.connect(mongoUri)
     .then(() => {
         console.log('✅ Connected to MongoDB');
         seedProjects();

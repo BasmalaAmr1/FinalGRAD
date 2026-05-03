@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import dataService from '../services/dataService';
+import { projectsAPI } from '../services/apiService';
 
 const Projects = () => {
   const [showModal, setShowModal] = useState(false);
@@ -29,14 +29,15 @@ const Projects = () => {
     }
   };
 
-  // Load projects from dataService
-  const loadProjectsFromService = () => {
+  // Load projects from API
+  const loadProjectsFromService = async () => {
     try {
-      const projects = dataService.getProjects();
-      console.log('📥 Loaded projects from dataService:', projects.length);
+      const response = await projectsAPI.getAll();
+      const projects = response.data || [];
+      console.log('📥 Loaded projects from API:', projects.length);
       return projects;
     } catch (err) {
-      console.error('❌ Failed to load projects from dataService:', err);
+      console.error('❌ Failed to load projects from API:', err);
       return [];
     }
   };
@@ -105,24 +106,18 @@ const Projects = () => {
     }
   ];
 
-  // Fetch projects from dataService
-  const fetchProjects = () => {
+  // Fetch projects from API
+  const fetchProjects = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Load projects from dataService
-      const projects = dataService.getProjects();
+      // Load projects from API
+      const response = await projectsAPI.getAll();
+      const projects = response.data || [];
       setProjectsList(projects);
       
-      // Subscribe to dataService changes for live updates
-      const unsubscribe = dataService.subscribe((changeType, data, cache) => {
-        if (changeType === 'project_added' || changeType === 'project_updated' || changeType === 'project_deleted') {
-          fetchProjects();
-        }
-      });
-      
-      return unsubscribe;
+      return () => {}; // No subscription needed for API
       
     } catch (err) {
       console.error('Error fetching projects:', err);
@@ -133,10 +128,16 @@ const Projects = () => {
   };
 
   useEffect(() => {
-    const unsubscribe = fetchProjects();
-    return () => {
-      if (unsubscribe) unsubscribe();
+    const setupProjects = async () => {
+      const unsubscribe = await fetchProjects();
+      return unsubscribe;
     };
+    
+    setupProjects().then(unsubscribe => {
+      return () => {
+        if (unsubscribe) unsubscribe();
+      };
+    });
   }, []);
 
   const handleEdit = (project) => {
@@ -176,22 +177,22 @@ const Projects = () => {
       alert('Project name is required');
       return;
     }
-    if (!formData.location?.city || formData.location.city.trim() === '') {
+    if (!formData.location || formData.location.trim() === '') {
       console.log('❌ Location validation failed');
       alert('Project location is required');
       return;
     }
-    if (!formData.development?.totalUnits || formData.development.totalUnits <= 0) {
+    if (!formData.totalUnits || formData.totalUnits <= 0) {
       console.log('❌ Total units validation failed');
       alert('Total units must be greater than 0');
       return;
     }
-    if (!formData.development?.availableUnits || formData.development.availableUnits < 0) {
+    if (!formData.availableUnits || formData.availableUnits < 0) {
       console.log('❌ Available units validation failed');
       alert('Available units must be 0 or greater');
       return;
     }
-    if (!formData.pricing?.priceRange || formData.pricing.priceRange.trim() === '') {
+    if (!formData.priceRange || formData.priceRange.trim() === '') {
       console.log('❌ Price range validation failed');
       alert('Price range is required');
       return;
@@ -204,45 +205,41 @@ const Projects = () => {
       
       if (editingProject) {
         console.log('📝 Updating existing project:', editingProject._id);
-        // Update existing project using dataService
-        const updatedProject = dataService.updateProject(editingProject._id, formData);
-        if (updatedProject) {
-          console.log('✅ Project updated in dataService');
+        try {
+          // Update existing project using API
+          const response = await projectsAPI.update(editingProject._id, formData);
+          console.log('✅ Project updated in API:', response.data);
           alert('Project updated successfully!');
-        } else {
-          console.error('❌ Failed to update project');
-          alert('Failed to update project');
+          
+          // Reload projects from API
+          const updatedProjects = await loadProjectsFromService();
+          setProjectsList(updatedProjects);
+        } catch (error) {
+          console.error('❌ Failed to update project:', error);
+          alert('Failed to update project: ' + error.message);
+          return;
         }
       } else {
         console.log('➕ Adding new project...');
-        // Add new project using dataService
-        const newProject = dataService.addProject(formData);
-        console.log('✅ New project added to dataService:', newProject);
-        alert('Project added successfully!');
+        try {
+          // Add new project using API
+          const response = await projectsAPI.create(formData);
+          console.log('✅ New project added to API:', response.data);
+          alert('Project added successfully!');
+          
+          // Reload projects from API
+          const updatedProjects = await loadProjectsFromService();
+          setProjectsList(updatedProjects);
+        } catch (error) {
+          console.error('❌ Failed to add project to API:', error);
+          alert('Failed to add project: ' + error.message);
+          return;
+        }
       }
       
       setShowModal(false);
       setEditingProject(null);
       console.log('🔒 Modal closed');
-      
-      // Try API call but don't fail if it doesn't work
-      try {
-        const response = await fetch(`http://localhost:5000/api/projects${editingProject ? `/${editingProject._id}` : ''}`, {
-          method: editingProject ? 'PUT' : 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(formData)
-        });
-
-        if (response.ok) {
-          console.log('✅ Project saved to backend successfully');
-        } else {
-          console.log('⚠️ Backend save failed but localStorage updated');
-        }
-      } catch (apiError) {
-        console.log('⚠️ Backend save failed but localStorage updated:', apiError.message);
-      }
     } catch (err) {
       console.error('❌ Error saving project:', err);
       alert('Failed to save project');
@@ -294,30 +291,13 @@ const Projects = () => {
   const handleDelete = async (projectId) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
       try {
-        // Delete project using dataService
-        const deletedProject = dataService.deleteProject(projectId);
-        if (deletedProject) {
-          console.log('✅ Project deleted from dataService');
-          alert('Project deleted successfully!');
-        } else {
-          console.error('❌ Failed to delete project');
-          alert('Failed to delete project');
-        }
+        // Delete project using API
+        await projectsAPI.delete(projectId);
+        console.log('✅ Project deleted from API');
+        alert('Project deleted successfully!');
         
-        // Try API call but don't fail if it doesn't work
-        try {
-          const response = await fetch(`http://localhost:5000/api/projects/${projectId}`, {
-            method: 'DELETE'
-          });
-
-          if (response.ok) {
-            console.log('✅ Project deleted from backend');
-          } else {
-            console.log('⚠️ Backend delete failed but localStorage updated');
-          }
-        } catch (apiError) {
-          console.log('⚠️ Backend delete failed but localStorage updated:', apiError.message);
-        }
+        // Refresh projects list from API
+        await fetchProjects();
       } catch (err) {
         console.error('Error deleting project:', err);
         alert('Failed to delete project');
@@ -414,25 +394,25 @@ const Projects = () => {
                           </div>
                         </div>
                       </td>
-                      <td>{project.location?.city || 'Unknown Location'}</td>
+                      <td>{project.location || 'Unknown Location'}</td>
                       <td>{project.type}</td>
                       <td>
                         <div>
-                          <span className="fw-semibold">{project.development?.availableUnits || 0}</span>
-                          <span className="text-muted"> / {project.development?.totalUnits || 0}</span>
+                          <span className="fw-semibold">{project.availableUnits || 0}</span>
+                          <span className="text-muted"> / {project.totalUnits || 0}</span>
                         </div>
                         <div className="progress mt-1" style={{ height: '4px' }}>
                           <div 
                             className="progress-bar bg-info" 
-                            style={{ width: `${((project.development?.totalUnits - project.development?.availableUnits) / project.development?.totalUnits) * 100 || 0}%` }}
+                            style={{ width: `${((project.totalUnits - project.availableUnits) / project.totalUnits) * 100 || 0}%` }}
                           ></div>
                         </div>
                       </td>
-                      <td>{project.pricing?.priceRange || 'N/A'}</td>
+                      <td>{project.priceRange || 'N/A'}</td>
                       <td>{getStatusBadge(project.status)}</td>
                       <td>
                         <small className="text-muted">
-                          {project.timeline?.completionDate ? new Date(project.timeline.completionDate).toLocaleDateString() : 'N/A'}
+                          {project.completionDate ? new Date(project.completionDate).toLocaleDateString() : 'N/A'}
                         </small>
                       </td>
                       <td>
@@ -503,8 +483,8 @@ const Projects = () => {
                     <input
                       type="text"
                       className="form-control"
-                      value={formData.location?.city || ''}
-                      onChange={(e) => setFormData({...formData, location: {...formData.location, city: e.target.value}})}
+                      value={formData.location || ''}
+                      onChange={(e) => setFormData({...formData, location: e.target.value})}
                       placeholder="Enter city"
                     />
                   </div>
@@ -513,8 +493,8 @@ const Projects = () => {
                     <input
                       type="number"
                       className="form-control"
-                      value={formData.development?.totalUnits || ''}
-                      onChange={(e) => setFormData({...formData, development: {...formData.development, totalUnits: parseInt(e.target.value) || 0}})}
+                      value={formData.totalUnits || ''}
+                      onChange={(e) => setFormData({...formData, totalUnits: parseInt(e.target.value) || 0})}
                       placeholder="0"
                     />
                   </div>
@@ -523,8 +503,8 @@ const Projects = () => {
                     <input
                       type="number"
                       className="form-control"
-                      value={formData.development?.availableUnits || ''}
-                      onChange={(e) => setFormData({...formData, development: {...formData.development, availableUnits: parseInt(e.target.value) || 0}})}
+                      value={formData.availableUnits || ''}
+                      onChange={(e) => setFormData({...formData, availableUnits: parseInt(e.target.value) || 0})}
                       placeholder="0"
                     />
                   </div>
@@ -545,8 +525,8 @@ const Projects = () => {
                     <input
                       type="text"
                       className="form-control"
-                      value={formData.pricing?.priceRange || ''}
-                      onChange={(e) => setFormData({...formData, pricing: {...formData.pricing, priceRange: e.target.value}})}
+                      value={formData.priceRange || ''}
+                      onChange={(e) => setFormData({...formData, priceRange: e.target.value})}
                       placeholder="e.g., 1M - 3M EGP"
                     />
                   </div>
@@ -567,8 +547,8 @@ const Projects = () => {
                     <input
                       type="date"
                       className="form-control"
-                      value={formData.timeline?.completionDate || ''}
-                      onChange={(e) => setFormData({...formData, timeline: {...formData.timeline, completionDate: e.target.value}})}
+                      value={formData.completionDate || ''}
+                      onChange={(e) => setFormData({...formData, completionDate: e.target.value})}
                     />
                   </div>
                   <div className="col-12">

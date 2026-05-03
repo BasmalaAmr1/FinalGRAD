@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import dataService from '../services/dataService';
+import { projectsAPI, applicationsAPI } from '../services/apiService';
 
 const NewApplication = () => {
   const navigate = useNavigate();
@@ -34,13 +34,21 @@ const NewApplication = () => {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    const loadProjects = () => {
+    const loadProjects = async () => {
       try {
-        const projectsData = dataService.getProjects();
-        const activeProjects = projectsData.filter(project => project.status === 'active');
+        setLoading(true);
+        setError(null);
+        
+        // Load projects from real database
+        const response = await projectsAPI.getAll();
+        const allProjects = response.data || [];
+        const activeProjects = allProjects.filter(project => project.status === 'active');
         setProjects(activeProjects);
       } catch (err) {
-        setError('Failed to load projects');
+        console.error('Failed to load projects:', err);
+        setError('Failed to load projects from database. Please check your connection and try again.');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -57,23 +65,44 @@ const NewApplication = () => {
 
     if (name === 'projectName') {
       const selectedProject = projects.find(project => project.name === value);
+      console.log('🔍 Selected project:', selectedProject);
+      console.log('🔍 Available projects:', projects.map(p => ({ name: p.name, id: p.id })));
+      
       if (selectedProject) {
         setFormData(prev => ({
           ...prev,
           projectId: selectedProject.id
+        }));
+        console.log('🔍 Set projectId to:', selectedProject.id);
+        console.log('🔍 Form data after project selection:', { ...formData, projectId: selectedProject.id });
+      } else {
+        console.log('❌ Project not found with name:', value);
+        setError('Please select a valid project from the list');
+        setFormData(prev => ({
+          ...prev,
+          projectId: ''
         }));
       }
     }
   };
 
   const validateForm = () => {
-    const required = ['applicantName', 'nationalId', 'applicantEmail', 'applicantPhone', 'projectName', 'income', 'familySize', 'currentHousing'];
+    const required = ['applicantName', 'nationalId', 'applicantEmail', 'applicantPhone', 'projectName', 'projectId', 'income', 'familySize', 'currentHousing'];
     
     for (const field of required) {
       if (!formData[field] || formData[field].trim() === '') {
         setError(`${field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, ' $1')} is required`);
         return false;
       }
+    }
+
+    // Debug: Log form data
+    console.log('🔍 Form data validation:', formData);
+
+    // Name validation (3-100 characters)
+    if (formData.applicantName.length < 3 || formData.applicantName.length > 100) {
+      setError('Name must be between 3 and 100 characters');
+      return false;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -106,6 +135,18 @@ const NewApplication = () => {
       return false;
     }
 
+    // Current housing validation (10-200 characters)
+    if (formData.currentHousing.length < 10 || formData.currentHousing.length > 200) {
+      setError('Current housing description must be between 10 and 200 characters');
+      return false;
+    }
+
+    // Project name validation (3-100 characters)
+    if (formData.projectName.length < 3 || formData.projectName.length > 100) {
+      setError('Project name must be between 3 and 100 characters');
+      return false;
+    }
+
     return true;
   };
 
@@ -123,14 +164,27 @@ const NewApplication = () => {
 
     try {
       const applicationData = {
-        ...formData,
+        name: formData.applicantName,
+        nationalId: formData.nationalId,
+        email: formData.applicantEmail,
+        phone: formData.applicantPhone,
+        projectName: formData.projectName,
+        projectId: formData.projectId,
         income: parseFloat(formData.income),
         familySize: parseInt(formData.familySize),
-        submittedAt: new Date().toISOString(),
+        currentHousing: formData.currentHousing,
+        requestedUnitType: formData.requestedUnitType,
+        preferredFloor: formData.preferredFloor,
+        paymentMethod: formData.paymentMethod,
+        specialRequirements: formData.specialRequirements,
         status: 'pending'
       };
 
-      const newApplication = dataService.addApplication(applicationData);
+      console.log('🔍 Submitting application data:', JSON.stringify(applicationData, null, 2));
+
+      // Add application using API service
+      const response = await applicationsAPI.create(applicationData);
+      const newApplication = response.data;
       
       setSuccess('Application submitted successfully!');
       
@@ -139,7 +193,19 @@ const NewApplication = () => {
       }, 2000);
       
     } catch (err) {
-      setError('Failed to submit application. Please try again.');
+      console.error('Error submitting application:', err);
+      console.error('Error details:', err.message);
+      
+      // Show more detailed error message
+      if (err.message === 'Validation errors') {
+        setError('Validation failed. Please check all fields and try again.');
+      } else if (err.message.includes('National ID')) {
+        setError('National ID already exists. Please use a different ID.');
+      } else if (err.message.includes('Email')) {
+        setError('Email already exists. Please use a different email.');
+      } else {
+        setError(`Failed to submit application: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -269,20 +335,27 @@ const NewApplication = () => {
                 <div className="row">
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Preferred Project *</label>
-                    <select
-                      className="form-control"
-                      name="projectName"
-                      value={formData.projectName}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">Select a project</option>
-                      {projects.map(project => (
-                        <option key={project.id} value={project.name}>
-                          {project.name}
-                        </option>
-                      ))}
-                    </select>
+                    {projects.length > 0 ? (
+                      <select
+                        className="form-control"
+                        name="projectName"
+                        value={formData.projectName}
+                        onChange={handleInputChange}
+                        required
+                      >
+                        <option value="">Select a project</option>
+                        {projects.map(project => (
+                          <option key={project.id} value={project.name}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="alert alert-warning">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        Projects are currently unavailable. Please refresh the page or try again later.
+                      </div>
+                    )}
                   </div>
                   <div className="col-md-6 mb-3">
                     <label className="form-label">Requested Unit Type</label>
@@ -292,10 +365,10 @@ const NewApplication = () => {
                       value={formData.requestedUnitType}
                       onChange={handleInputChange}
                     >
-                      <option value="1BR">1 Bedroom</option>
-                      <option value="2BR">2 Bedrooms</option>
-                      <option value="3BR">3 Bedrooms</option>
-                      <option value="Studio">Studio</option>
+                      <option key="1br" value="1BR">1 Bedroom</option>
+                      <option key="2br" value="2BR">2 Bedrooms</option>
+                      <option key="3br" value="3BR">3 Bedrooms</option>
+                      <option key="studio" value="Studio">Studio</option>
                     </select>
                   </div>
                   <div className="col-md-6 mb-3">
@@ -306,14 +379,14 @@ const NewApplication = () => {
                       value={formData.preferredFloor}
                       onChange={handleInputChange}
                     >
-                      <option value="Any">Any</option>
-                      <option value="Ground">Ground Floor</option>
-                      <option value="1st">1st Floor</option>
-                      <option value="2nd">2nd Floor</option>
-                      <option value="3rd">3rd Floor</option>
-                      <option value="4th">4th Floor</option>
-                      <option value="5th">5th Floor</option>
-                      <option value="6th+">6th Floor or above</option>
+                      <option key="any" value="Any">Any</option>
+                      <option key="ground" value="Ground">Ground Floor</option>
+                      <option key="1st" value="1st">1st Floor</option>
+                      <option key="2nd" value="2nd">2nd Floor</option>
+                      <option key="3rd" value="3rd">3rd Floor</option>
+                      <option key="4th" value="4th">4th Floor</option>
+                      <option key="5th" value="5th">5th Floor</option>
+                      <option key="6th-plus" value="6th+">6th Floor or above</option>
                     </select>
                   </div>
                   <div className="col-md-6 mb-3">
@@ -324,9 +397,9 @@ const NewApplication = () => {
                       value={formData.paymentMethod}
                       onChange={handleInputChange}
                     >
-                      <option value="installments">Installments</option>
-                      <option value="cash">Cash</option>
-                      <option value="bank_loan">Bank Loan</option>
+                      <option key="installments" value="installments">Installments</option>
+                      <option key="cash" value="cash">Cash</option>
+                      <option key="bank_loan" value="bank_loan">Bank Loan</option>
                     </select>
                   </div>
                 </div>

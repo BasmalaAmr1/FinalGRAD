@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import dataService from '../services/dataService';
+import { applicationsAPI, projectsAPI } from '../services/apiService';
+
+// Applications page updated with project enrichment - v2.0
 
 const Applications = () => {
   const navigate = useNavigate();
@@ -8,6 +10,7 @@ const Applications = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [applications, setApplications] = useState([]);
+  const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
@@ -21,33 +24,58 @@ const Applications = () => {
 
   
   
-  // Load applications using data service
-  const fetchApplications = () => {
+  // Load applications and projects using API service
+  const fetchApplications = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const applicationsData = dataService.getEnrichedApplications();
+      // Fetch both applications and projects
+      const [applicationsResponse, projectsResponse] = await Promise.all([
+        applicationsAPI.getAll(),
+        projectsAPI.getAll()
+      ]);
       
-      setApplications(applicationsData);
+      const applicationsData = applicationsResponse.data || [];
+      const projectsData = projectsResponse.data || [];
+      
+      // Enrich applications with project information
+      console.log('🔍 Raw applications:', applicationsData.length);
+      console.log('🔍 Raw projects:', projectsData.length);
+      
+      const enrichedApplications = applicationsData.map(app => {
+        const project = projectsData.find(p => p._id === app.projectId || p.id === app.projectId);
+        
+        const enriched = {
+          ...app,
+          id: app._id || app.id,
+          projectName: app.projectName || (project ? project.name : 'Unknown Project'),
+          applicantName: app.applicantName || app.name || 'Unknown User',
+          submittedDate: app.createdAt || app.submittedDate || new Date().toISOString(),
+          // Include unit type, preferred floor, and payment method with defaults
+          requestedUnitType: app.requestedUnitType || '2BR',
+          preferredFloor: app.preferredFloor || 'Any',
+          paymentMethod: app.paymentMethod || 'installments'
+        };
+        
+        console.log(`📋 App: ${enriched.applicantName} -> Project: ${enriched.projectName} (projectId: ${app.projectId})`);
+        
+        return enriched;
+      });
+      
+      setProjects(projectsData);
+      setApplications(enrichedApplications);
     } catch (err) {
+      console.error('Error fetching applications:', err);
       setError('Failed to load applications. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Setup data service subscription and initial load
+  // Setup initial load
   useEffect(() => {
     fetchApplications();
-    
-    // Subscribe to data changes for live updates
-    const unsubscribe = dataService.subscribe((changeType, data, cache) => {
-      // Always refetch to ensure data consistency
-      fetchApplications();
-    });
-    
-    return () => unsubscribe();
   }, []);
 
   // Handle URL parameters for initial filtering
@@ -71,8 +99,17 @@ const Applications = () => {
     });
   };
 
-  // Filter applications using data service search
-  const filteredApplications = dataService.searchApplications(searchTerm, statusFilter);
+  // Filter applications locally
+  const filteredApplications = applications.filter(app => {
+    const matchesSearch = searchTerm === '' || 
+      (app.applicantName && app.applicantName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (app.email && app.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (app.projectName && app.projectName.toLowerCase().includes(searchTerm.toLowerCase()));
+    
+    const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
+    
+    return matchesSearch && matchesStatus;
+  });
 
   // Handle application rejection with reason dialog
   const handleRejectClick = (appId) => {
@@ -114,31 +151,33 @@ const Applications = () => {
   const confirmDeletion = async () => {
     setShowDeleteDialog(false);
     try {
-      const deleted = dataService.deleteApplication(deletingAppId);
-      if (deleted) {
-        fetchApplications();
-      }
+      await applicationsAPI.delete(deletingAppId);
+      fetchApplications();
     } catch (err) {
-      setError('Failed to delete application');
+      console.error('Error deleting application:', err);
     }
   };
 
   
-  // Update application status using data service
+  // Update application status using API service
   const updateApplicationStatus = async (appId, newStatus, reason = null) => {
     setUpdatingId(appId);
     
     try {
-      // Use data service to update status
-      const updatedApplication = dataService.updateApplicationStatus(appId, newStatus, reason, 'Admin');
+      // Use API service to update status
+      const updateData = {
+        status: newStatus,
+        rejectionReason: reason
+      };
+      await applicationsAPI.update(appId, updateData);
       
       // Update local state for immediate UI feedback
       const updatedApplications = applications.map(app => 
-        (app.id === appId || app._id === appId) ? updatedApplication : app
+        (app.id === appId || app._id === appId) ? { ...app, status: newStatus, rejectionReason: reason } : app
       );
       setApplications(updatedApplications);
       
-      console.log('Application status updated successfully:', updatedApplication.status);
+      console.log('Application status updated successfully:', newStatus);
       
       // Try to sync with backend (optional)
       try {

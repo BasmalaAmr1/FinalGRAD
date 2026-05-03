@@ -1,4 +1,4 @@
-import dataJson from '../../data.json';
+// Removed data.json dependency - now using only backend API
 
 class DataService {
   constructor() {
@@ -11,6 +11,7 @@ class DataService {
       notifications: null
     };
     this.lastUpdate = null;
+    this.apiBaseUrl = 'http://localhost:5000/api'; // Backend API URL
     this.init();
   }
 
@@ -19,46 +20,113 @@ class DataService {
     this.setupStorageSync();
   }
 
-  // Load initial data from data.json and localStorage
-  loadInitialData() {
-    // Try to load saved data from localStorage first
+  // Load initial data from backend API (no data.json dependency)
+  async loadInitialData() {
+    // Start with empty cache - will be populated by API calls
+    this.cache = {
+      users: [],
+      projects: [],
+      applications: [],
+      auditLogs: [],
+      notifications: []
+    };
+    
+    console.log('Initialized empty cache - will load from backend API');
+    
+    // Load data from backend API
     try {
-      const savedApplications = localStorage.getItem('dataJsonApplications');
-      const savedUsers = localStorage.getItem('dataJsonUsers');
-      const savedProjects = localStorage.getItem('dataJsonProjects');
-      const savedAuditLogs = localStorage.getItem('dataJsonAuditLogs');
-      const savedNotifications = localStorage.getItem('dataJsonNotifications');
+      await Promise.all([
+        this.loadProjectsFromAPI(),
+        this.loadUsersFromAPI(),
+        this.loadApplicationsFromAPI(),
+        this.loadAuditLogsFromAPI(),
+        this.loadNotificationsFromAPI()
+      ]);
       
-      this.cache = {
-        users: savedUsers ? JSON.parse(savedUsers) : [...(dataJson.users || [])],
-        projects: savedProjects ? JSON.parse(savedProjects) : [...(dataJson.projects || [])],
-        applications: savedApplications ? JSON.parse(savedApplications) : [...(dataJson.applications || [])],
-        auditLogs: savedAuditLogs ? JSON.parse(savedAuditLogs) : [...(dataJson.auditLogs || [])],
-        notifications: savedNotifications ? JSON.parse(savedNotifications) : [...(dataJson.notifications || [])]
-      };
-      
-      console.log('Loaded data from localStorage:', {
-        applications: this.cache.applications.length,
+      console.log('Loaded data from backend API:', {
         users: this.cache.users.length,
         projects: this.cache.projects.length,
+        applications: this.cache.applications.length,
         auditLogs: this.cache.auditLogs.length,
         notifications: this.cache.notifications.length
       });
+      
     } catch (err) {
-      console.error('Error loading from localStorage, using default data:', err);
-      // Fallback to default data
-      this.cache = {
-        users: [...(dataJson.users || [])],
-        projects: [...(dataJson.projects || [])],
-        applications: [...(dataJson.applications || [])],
-        auditLogs: [...(dataJson.auditLogs || [])],
-        notifications: [...(dataJson.notifications || [])]
-      };
+      console.error('Error loading from backend API:', err);
+      // Keep empty cache - frontend will show no data until API works
     }
-    
-    this.lastUpdate = new Date();
-    this.applyPersistedChanges();
     this.notifySubscribers('initial_load');
+  }
+
+  // Load data from backend API methods
+  async loadProjectsFromAPI() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/projects`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.cache.projects = result.data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load projects from API:', error);
+    }
+  }
+
+  async loadUsersFromAPI() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/users`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.cache.users = result.data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load users from API:', error);
+    }
+  }
+
+  async loadApplicationsFromAPI() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/applications`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.cache.applications = result.data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load applications from API:', error);
+    }
+  }
+
+  async loadAuditLogsFromAPI() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/auditLogs`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.cache.auditLogs = result.data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load audit logs from API:', error);
+    }
+  }
+
+  async loadNotificationsFromAPI() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/notifications`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          this.cache.notifications = result.data;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load notifications from API:', error);
+    }
   }
 
   // Apply any persisted status changes
@@ -82,9 +150,9 @@ class DataService {
         });
       }
 
-      const updatedDataJson = localStorage.getItem('dataJsonApplications');
-      if (updatedDataJson) {
-        this.cache.applications = JSON.parse(updatedDataJson);
+      const updatedApplications = localStorage.getItem('backendApplications');
+      if (updatedApplications) {
+        this.cache.applications = JSON.parse(updatedApplications);
       }
     } catch (error) {
       console.error('Error applying persisted changes:', error);
@@ -94,7 +162,7 @@ class DataService {
   // Setup storage sync
   setupStorageSync() {
     window.addEventListener('storage', (e) => {
-      if (e.key === 'dataJsonApplications' || e.key === 'permanentApplicationStatus') {
+      if (e.key === 'backendApplications' || e.key === 'permanentApplicationStatus') {
         this.loadInitialData();
       }
     });
@@ -310,9 +378,33 @@ class DataService {
     return this.getUser(userId);
   }
 
-  // Get all projects
-  getProjects() {
-    return [...this.cache.projects];
+  // Get all projects from MongoDB backend
+  async getProjects() {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/projects`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const result = await response.json();
+      
+      if (result.success) {
+        this.cache.projects = result.data;
+        return result.data;
+      } else {
+        console.error('API returned error:', result.message);
+        // Return cached data if available
+        return [...(this.cache.projects || [])];
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects from API:', error);
+      // Return cached data if available
+      return [...(this.cache.projects || [])];
+    }
+  }
+
+  // Synchronous version for backward compatibility
+  getProjectsSync() {
+    return [...(this.cache.projects || [])];
   }
 
   // Get project by ID
@@ -326,36 +418,75 @@ class DataService {
     return project ? project.name : 'Unknown Project';
   }
 
-  // Add new project
-  addProject(projectData) {
-    const newProject = {
-      id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      name: projectData.name,
-      location: projectData.location,
-      totalUnits: parseInt(projectData.totalUnits),
-      availableUnits: parseInt(projectData.availableUnits),
-      priceRange: projectData.priceRange,
-      type: projectData.type || 'Apartments',
-      status: projectData.status || 'active',
-      completionDate: projectData.completionDate,
-      description: projectData.description || '',
-      createdAt: new Date().toISOString()
-    };
+  // Add new project to real database
+  async addProject(projectData) {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/projects`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(projectData)
+      });
 
-    this.cache.projects.unshift(newProject);
-    this.saveToStorage();
-    this.notifySubscribers('project_added', newProject);
-    
-    // Add audit log
-    this.addAuditLog({
-      action: 'project_created',
-      userId: 'admin',
-      userName: 'Admin User',
-      projectId: newProject.id,
-      details: `New project created: ${newProject.name}`
-    });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
 
-    return newProject;
+      const result = await response.json();
+      
+      if (result.success) {
+        const newProject = result.data;
+        this.cache.projects.push(newProject);
+        this.saveToStorage();
+        this.notifySubscribers('project_added', newProject);
+        return newProject;
+      } else {
+        throw new Error(result.message || 'Failed to create project');
+      }
+    } catch (error) {
+      console.error('Failed to add project to API:', error);
+      // Fallback to local storage for offline mode
+      const newProject = {
+        id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: projectData.name,
+        location: projectData.location || {},
+        type: projectData.type || 'residential',
+        category: projectData.category || 'apartments',
+        status: projectData.status || 'planning',
+        development: projectData.development || {
+          totalUnits: 0,
+          availableUnits: 0,
+          soldUnits: 0,
+          phases: 1
+        },
+        pricing: projectData.pricing || {
+          priceRange: '0 - 0 EGP',
+          unitTypes: [],
+          downPayment: '10%',
+          installmentYears: 5
+        },
+        timeline: projectData.timeline || {
+          completionDate: new Date().toISOString().split('T')[0],
+          deliveryDate: new Date().toISOString().split('T')[0],
+          constructionProgress: 0
+        },
+        features: projectData.features || {
+          amenities: [],
+          areaRange: '0 - 0 sqm',
+          floors: 1
+        },
+        description: projectData.description || '',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      this.cache.projects.push(newProject);
+      this.saveToStorage();
+      this.notifySubscribers('project_added', newProject);
+      
+      return newProject;
+    }
   }
 
   // Update project
@@ -412,27 +543,55 @@ class DataService {
     return this.cache.users[userIndex];
   }
 
-  // Delete project
-  deleteProject(projectId) {
-    const projectIndex = this.cache.projects.findIndex(proj => proj.id === projectId || proj._id === projectId);
-    if (projectIndex !== -1) {
-      const deletedProject = this.cache.projects[projectIndex];
-      this.cache.projects.splice(projectIndex, 1);
-      this.saveToStorage();
-      this.notifySubscribers('project_deleted', deletedProject);
-      
-      // Add audit log
-      this.addAuditLog({
-        action: 'project_deleted',
-        userId: 'admin',
-        userName: 'Admin User',
-        projectId: projectId,
-        details: `Project deleted: ${deletedProject.name}`
+  // Delete project from real database
+  async deleteProject(projectId) {
+    try {
+      const response = await fetch(`${this.apiBaseUrl}/projects/${projectId}`, {
+        method: 'DELETE'
       });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
       
-      return deletedProject;
+      if (result.success) {
+        // Find and remove from cache
+        const projectIndex = this.cache.projects.findIndex(proj => proj.id === projectId || proj._id === projectId);
+        if (projectIndex !== -1) {
+          const deletedProject = this.cache.projects[projectIndex];
+          this.cache.projects.splice(projectIndex, 1);
+          this.saveToStorage();
+          this.notifySubscribers('project_deleted', deletedProject);
+          
+          // Add audit log
+          this.addAuditLog({
+            action: 'project_deleted',
+            userId: 'admin',
+            userName: 'Admin User',
+            projectId: projectId,
+            details: `Project deleted: ${deletedProject.name}`
+          });
+          
+          return deletedProject;
+        }
+      } else {
+        throw new Error(result.message || 'Failed to delete project');
+      }
+    } catch (error) {
+      console.error('Failed to delete project from API:', error);
+      // Fallback to local deletion
+      const projectIndex = this.cache.projects.findIndex(proj => proj.id === projectId || proj._id === projectId);
+      if (projectIndex !== -1) {
+        const deletedProject = this.cache.projects[projectIndex];
+        this.cache.projects.splice(projectIndex, 1);
+        this.saveToStorage();
+        this.notifySubscribers('project_deleted', deletedProject);
+        return deletedProject;
+      }
+      return null;
     }
-    return null;
   }
 
   // Get user details for application
@@ -521,12 +680,16 @@ class DataService {
       
       return {
         ...app,
-        applicantName: user ? user.name : (app.applicationData?.applicantName || 'Unknown User'),
-        applicantEmail: user ? user.email : (app.applicationData?.applicantEmail || 'unknown@example.com'),
-        applicantPhone: user ? user.phone : (app.applicationData?.applicantPhone || 'N/A'),
+        applicantName: app.applicationData?.applicantName || (user && user.name) || 'Unknown User',
+        applicantEmail: app.applicationData?.applicantEmail || (user && user.email) || 'unknown@example.com',
+        applicantPhone: app.applicationData?.applicantPhone || (user && user.phone) || 'N/A',
         projectName: projectName,
         priority: app.priority || 'normal',
-        status: app.status || 'pending'
+        status: app.status || 'pending',
+        // Include unit type, preferred floor, and payment method with defaults
+        requestedUnitType: app.requestedUnitType || app.applicationData?.requestedUnitType || '2BR',
+        preferredFloor: app.preferredFloor || app.applicationData?.preferredFloor || 'Any',
+        paymentMethod: app.paymentMethod || app.applicationData?.paymentMethod || 'installments'
       };
     });
   }
@@ -656,11 +819,11 @@ class DataService {
   // Save to localStorage for persistence
   saveToStorage() {
     try {
-      localStorage.setItem('dataJsonApplications', JSON.stringify(this.cache.applications));
-      localStorage.setItem('dataJsonUsers', JSON.stringify(this.cache.users));
-      localStorage.setItem('dataJsonProjects', JSON.stringify(this.cache.projects));
-      localStorage.setItem('dataJsonAuditLogs', JSON.stringify(this.cache.auditLogs));
-      localStorage.setItem('dataJsonNotifications', JSON.stringify(this.cache.notifications));
+      localStorage.setItem('backendApplications', JSON.stringify(this.cache.applications));
+      localStorage.setItem('backendUsers', JSON.stringify(this.cache.users));
+      localStorage.setItem('backendProjects', JSON.stringify(this.cache.projects));
+      localStorage.setItem('backendAuditLogs', JSON.stringify(this.cache.auditLogs));
+      localStorage.setItem('backendNotifications', JSON.stringify(this.cache.notifications));
       
       // Also save permanent status changes
       const permanentStatus = {};
@@ -713,13 +876,58 @@ class DataService {
           this.cache.applications = data.data;
           this.saveToStorage();
           this.notifySubscribers('backend_refresh');
-          return true;
+          return { success: true, error: null };
         }
       }
+      return { success: false, error: 'Invalid response format' };
     } catch (error) {
       console.log('Backend refresh failed, using local data');
+      return { success: false, error: error.message };
     }
-    return false;
+  }
+
+  // Enhanced error handling for API calls
+  async safeApiCall(url, options = {}) {
+    try {
+      const response = await fetch(url, {
+        timeout: 10000, // 10 second timeout
+        ...options
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        throw new Error('Network connection failed. Please check your internet connection.');
+      } else if (error.message.includes('timeout')) {
+        throw new Error('Request timed out. Please try again.');
+      }
+      throw error;
+    }
+  }
+
+  // Get projects with error handling
+  async getProjectsWithErrorHandling() {
+    try {
+      const projects = await this.getProjects();
+      if (!projects || projects.length === 0) {
+        return { 
+          success: false, 
+          error: 'No projects available at the moment. Please try again later.',
+          data: []
+        };
+      }
+      return { success: true, error: null, data: projects };
+    } catch (error) {
+      return { 
+        success: false, 
+        error: 'Failed to load projects from database. Please refresh the page.',
+        data: []
+      };
+    }
   }
 }
 
@@ -727,3 +935,4 @@ class DataService {
 const dataService = new DataService();
 
 export default dataService;
+export { DataService };

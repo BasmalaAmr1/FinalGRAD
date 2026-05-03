@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import dataManager from '../data/dataManager';
+import apiDataManager from '../data/apiDataManager';
 import dashboardCalculations from '../utils/dashboardCalculations';
 
 const AdminDashboard = () => {
@@ -20,39 +20,88 @@ const AdminDashboard = () => {
     projectAnalysis: []
   });
   const [actionLoading, setActionLoading] = useState({});
+  const [monthlyChartData, setMonthlyChartData] = useState({
+    labels: [],
+    datasets: [{ data: [] }]
+  });
 
-  // Load dashboard data using new data-driven approach
-  const loadDashboardData = useCallback(() => {
+  // Load dashboard data using API-driven approach
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('Loading dashboard data with new architecture...');
+      console.log('Loading dashboard data from API...');
 
-      // Get all dashboard data from calculation layer
-      const data = dashboardCalculations.getDashboardData();
-      const auditLogs = dataManager.getAuditLogs();
-      const projectAnalysis = dashboardCalculations.getProjectAnalysis();
+      // Get all dashboard data from API
+      const [metrics, insights, trends, systemHealth, auditLogs, projectAnalysis] = await Promise.all([
+        apiDataManager.getDashboardMetrics(),
+        apiDataManager.getSmartInsights(),
+        apiDataManager.getTrendCalculations(),
+        apiDataManager.updateSystemHealth(),
+        apiDataManager.getAuditLogs(),
+        apiDataManager.getProjectDemandAnalysis()
+      ]);
 
-      console.log('Dashboard data loaded:', {
-        metrics: data.metrics,
-        insights: data.insights,
-        systemHealth: data.systemHealth
+      // Get monthly chart data
+      const monthlyData = await apiDataManager.getApplicationTrends();
+      const chartData = {
+        labels: monthlyData.map(t => {
+          const date = new Date(t.month + '-01');
+          return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }),
+        datasets: [
+          {
+            label: 'Total Applications',
+            data: monthlyData.map(t => t.total),
+            backgroundColor: 'rgba(37, 99, 235, 0.8)',
+            borderColor: 'rgba(37, 99, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Approved',
+            data: monthlyData.map(t => t.approved),
+            backgroundColor: 'rgba(22, 163, 74, 0.8)',
+            borderColor: 'rgba(22, 163, 74, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Pending',
+            data: monthlyData.map(t => t.pending),
+            backgroundColor: 'rgba(217, 119, 6, 0.8)',
+            borderColor: 'rgba(217, 119, 6, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Rejected',
+            data: monthlyData.map(t => t.rejected),
+            backgroundColor: 'rgba(220, 38, 38, 0.8)',
+            borderColor: 'rgba(220, 38, 38, 1)',
+            borderWidth: 1
+          }
+        ]
+      };
+
+      console.log('Dashboard data loaded from API:', {
+        metrics,
+        insights,
+        systemHealth
       });
 
       setDashboardData({
-        metrics: data.metrics,
-        insights: data.insights,
-        trends: data.trends,
-        systemHealth: data.systemHealth,
+        metrics,
+        insights,
+        trends,
+        systemHealth,
         auditLogs: auditLogs.slice(0, 10), // Latest 10 logs
         projectAnalysis: projectAnalysis.slice(0, 5) // Top 5 projects by demand
       });
 
+      setMonthlyChartData(chartData);
       setLastUpdate(new Date());
     } catch (err) {
       console.error('Error loading dashboard data:', err);
-      setError('Failed to load dashboard data');
+      setError('Unable to load dashboard data from server. Please check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -63,11 +112,9 @@ const AdminDashboard = () => {
     try {
       setActionLoading(prev => ({ ...prev, [applicationId]: 'approving' }));
       
-      const success = dataManager.approveApplication(applicationId);
+      const success = await apiDataManager.approveApplication(applicationId);
       
       if (success) {
-        // Clear cache to force recalculation
-        dashboardCalculations.clearCache();
         // Reload dashboard data
         loadDashboardData();
       }
@@ -82,11 +129,9 @@ const AdminDashboard = () => {
     try {
       setActionLoading(prev => ({ ...prev, [applicationId]: 'rejecting' }));
       
-      const success = dataManager.rejectApplication(applicationId, reason);
+      const success = await apiDataManager.rejectApplication(applicationId, reason);
       
       if (success) {
-        // Clear cache to force recalculation
-        dashboardCalculations.clearCache();
         // Reload dashboard data
         loadDashboardData();
       }
@@ -98,20 +143,43 @@ const AdminDashboard = () => {
   };
 
   // Get latest 5 applications
-  const recentApplications = dataManager.getApplications()
-    .sort((a, b) => new Date(b.submittedDate) - new Date(a.submittedDate))
-    .slice(0, 5);
+  const [recentApplications, setRecentApplications] = useState([]);
+  
+  useEffect(() => {
+    const getRecentApplications = async () => {
+      try {
+        console.log('🔍 Loading recent applications...');
+        const applications = await apiDataManager.getApplications();
+        console.log('📊 Applications loaded:', applications.length);
+        
+        const sorted = applications
+          .sort((a, b) => new Date(b.submittedDate) - new Date(a.submittedDate))
+          .slice(0, 5);
+        
+        console.log('🎯 Recent applications sorted:', sorted.length);
+        sorted.forEach((app, index) => {
+          console.log(`${index + 1}. ${app.applicantName} - ${app.projectName}`);
+        });
+        
+        setRecentApplications(sorted);
+      } catch (error) {
+        console.error('❌ Error getting recent applications:', error);
+        setRecentApplications([]);
+      }
+    };
+    
+    getRecentApplications();
+  }, [dashboardData]); // Refresh when dashboard data updates
 
-  // Setup data manager subscription and initial load
+  // Setup API data manager subscription and initial load
   useEffect(() => {
     // Load initial data
     loadDashboardData();
     
-    // Subscribe to data changes for real-time updates
-    const unsubscribe = dataManager.subscribe((data) => {
-      console.log('Dashboard received data change, reloading...');
-      // Clear cache and reload
-      dashboardCalculations.clearCache();
+    // Subscribe to API data changes for real-time updates
+    const unsubscribe = apiDataManager.subscribe((data) => {
+      console.log('Dashboard received API data change, reloading...');
+      // Reload dashboard data
       loadDashboardData();
     });
     
@@ -127,7 +195,7 @@ const AdminDashboard = () => {
     }, 1000);
     
     // Log admin login
-    dataManager.addAuditLog('login', 'Admin accessed dashboard', user?.name || 'Admin');
+    apiDataManager.addAuditLog('login', 'Admin accessed dashboard', user?.name || 'Admin');
     
     return () => {
       unsubscribe();
@@ -236,13 +304,109 @@ const AdminDashboard = () => {
     }
   };
 
-  // Prepare chart data using calculation layer
-  const prepareMonthlyData = () => {
-    return dashboardCalculations.getApplicationTrendsChart();
+  // Prepare chart data using API data
+  const prepareMonthlyData = async () => {
+    try {
+      const trends = await apiDataManager.getApplicationTrends();
+      
+      if (!trends || trends.length === 0) {
+        return {
+          labels: [],
+          datasets: [{ data: [] }]
+        };
+      }
+
+      return {
+        labels: trends.map(t => {
+          const date = new Date(t.month + '-01');
+          return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }),
+        datasets: [
+          {
+            label: 'Total Applications',
+            data: trends.map(t => t.total),
+            backgroundColor: 'rgba(37, 99, 235, 0.8)',
+            borderColor: 'rgba(37, 99, 235, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Approved',
+            data: trends.map(t => t.approved),
+            backgroundColor: 'rgba(22, 163, 74, 0.8)',
+            borderColor: 'rgba(22, 163, 74, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Pending',
+            data: trends.map(t => t.pending),
+            backgroundColor: 'rgba(217, 119, 6, 0.8)',
+            borderColor: 'rgba(217, 119, 6, 1)',
+            borderWidth: 1
+          },
+          {
+            label: 'Rejected',
+            data: trends.map(t => t.rejected),
+            backgroundColor: 'rgba(220, 38, 38, 0.8)',
+            borderColor: 'rgba(220, 38, 38, 1)',
+            borderWidth: 1
+          }
+        ]
+      };
+    } catch (error) {
+      console.error('Error preparing monthly data:', error);
+      return {
+        labels: [],
+        datasets: [{ data: [] }]
+      };
+    }
   };
 
   const prepareStatusData = () => {
-    return dashboardCalculations.getStatusDistributionChart();
+    if (!dashboardData.metrics) {
+      return {
+        labels: ['Approved', 'Pending', 'Rejected'],
+        datasets: [
+          {
+            data: [0, 0, 0],
+            backgroundColor: [
+              'rgba(22, 163, 74, 0.8)',
+              'rgba(217, 119, 6, 0.8)',
+              'rgba(220, 38, 38, 0.8)'
+            ],
+            borderColor: [
+              'rgba(22, 163, 74, 1)',
+              'rgba(217, 119, 6, 1)',
+              'rgba(220, 38, 38, 1)'
+            ],
+            borderWidth: 1
+          }
+        ]
+      };
+    }
+
+    return {
+      labels: ['Approved', 'Pending', 'Rejected'],
+      datasets: [
+        {
+          data: [
+            dashboardData.metrics.approvedApplications,
+            dashboardData.metrics.pendingApplications,
+            dashboardData.metrics.rejectedApplications
+          ],
+          backgroundColor: [
+            'rgba(22, 163, 74, 0.8)',
+            'rgba(217, 119, 6, 0.8)',
+            'rgba(220, 38, 38, 0.8)'
+          ],
+          borderColor: [
+            'rgba(22, 163, 74, 1)',
+            'rgba(217, 119, 6, 1)',
+            'rgba(220, 38, 38, 1)'
+          ],
+          borderWidth: 1
+        }
+      ]
+    };
   };
 
   const chartOptions = {
@@ -567,7 +731,7 @@ const AdminDashboard = () => {
                     </small>
                   </div>
                 </div>
-                <SimpleBarChart data={prepareMonthlyData()} title="Monthly Applications" />
+                <SimpleBarChart data={monthlyChartData} title="Monthly Applications" />
                 <div className="mt-3 text-center">
                   <small className="text-muted">
                     <i className="bi bi-info-circle me-1"></i>
@@ -638,68 +802,80 @@ const AdminDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {recentApplications.map((app) => (
-                        <tr key={app.id}>
-                          <td>
-                            <small className="text-muted font-monospace">
-                              #{app.id?.toString().slice(-6) || 'N/A'}
-                            </small>
-                          </td>
-                          <td className="fw-medium">{app.applicantName || 'Unknown'}</td>
-                          <td>
-                            <span className="badge bg-light text-dark">
-                              {app.projectName || 'N/A'}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`badge ${getStatusBadgeClass(app.status)}`}>
-                              {app.status}
-                            </span>
-                          </td>
-                          <td>
-                            <small className="text-muted">
-                              {formatDate(app.submittedDate)}
-                            </small>
-                          </td>
-                          <td>
-                            {app.status === 'pending' && (
-                              <div className="btn-group btn-group-sm" role="group">
-                                <button 
-                                  className="btn btn-success"
-                                  onClick={() => handleApproveApplication(app.id)}
-                                  disabled={actionLoading[app.id] === 'approving'}
-                                >
-                                  {actionLoading[app.id] === 'approving' ? (
-                                    <span className="spinner-border spinner-border-sm" role="status">
-                                      <span className="visually-hidden">Loading...</span>
-                                    </span>
-                                  ) : (
-                                    <i className="bi bi-check"></i>
-                                  )}
-                                </button>
-                                <button 
-                                  className="btn btn-danger"
-                                  onClick={() => handleRejectApplication(app.id, 'Rejected by admin')}
-                                  disabled={actionLoading[app.id] === 'rejecting'}
-                                >
-                                  {actionLoading[app.id] === 'rejecting' ? (
-                                    <span className="spinner-border spinner-border-sm" role="status">
-                                      <span className="visually-hidden">Loading...</span>
-                                    </span>
-                                  ) : (
-                                    <i className="bi bi-x"></i>
-                                  )}
-                                </button>
-                              </div>
-                            )}
-                            {app.status !== 'pending' && (
-                              <span className="text-muted">
-                                <i className={`bi bi-${app.status === 'approved' ? 'check-circle text-success' : 'x-circle text-danger'}`}></i>
+                      {recentApplications.length > 0 ? (
+                        recentApplications.map((app) => (
+                          <tr key={app.id}>
+                            <td>
+                              <small className="text-muted font-monospace">
+                                #{app.id?.toString().slice(-6) || 'N/A'}
+                              </small>
+                            </td>
+                            <td className="fw-medium">{app.applicantName || 'Unknown'}</td>
+                            <td>
+                              <span className="badge bg-light text-dark">
+                                {app.projectName || 'N/A'}
                               </span>
-                            )}
+                            </td>
+                            <td>
+                              <span className={`badge ${getStatusBadgeClass(app.status)}`}>
+                                {app.status}
+                              </span>
+                            </td>
+                            <td>
+                              <small className="text-muted">
+                                {formatDate(app.submittedDate)}
+                              </small>
+                            </td>
+                            <td>
+                              {app.status === 'pending' && (
+                                <div className="btn-group btn-group-sm" role="group">
+                                  <button 
+                                    className="btn btn-success"
+                                    onClick={() => handleApproveApplication(app.id)}
+                                    disabled={actionLoading[app.id] === 'approving'}
+                                  >
+                                    {actionLoading[app.id] === 'approving' ? (
+                                      <span className="spinner-border spinner-border-sm" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                      </span>
+                                    ) : (
+                                      <i className="bi bi-check"></i>
+                                    )}
+                                  </button>
+                                  <button 
+                                    className="btn btn-danger"
+                                    onClick={() => handleRejectApplication(app.id, 'Rejected by admin')}
+                                    disabled={actionLoading[app.id] === 'rejecting'}
+                                  >
+                                    {actionLoading[app.id] === 'rejecting' ? (
+                                      <span className="spinner-border spinner-border-sm" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                      </span>
+                                    ) : (
+                                      <i className="bi bi-x"></i>
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                              {app.status !== 'pending' && (
+                                <span className="text-muted">
+                                  <i className={`bi bi-${app.status === 'approved' ? 'check-circle text-success' : 'x-circle text-danger'}`}></i>
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan="6" className="text-center py-4">
+                            <div className="text-muted">
+                              <i className="bi bi-inbox fs-1 d-block mb-2"></i>
+                              <p className="mb-0">No recent applications found</p>
+                              <small>Applications will appear here once submitted</small>
+                            </div>
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>

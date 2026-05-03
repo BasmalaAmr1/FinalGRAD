@@ -16,14 +16,14 @@ const Reports = () => {
   });
 
   // Load data using data service
-  const loadReportData = () => {
+  const loadReportData = async () => {
     setLoading(true);
     setError(null);
     
     try {
-      // Load all data using mock service
+      // Load all data using async service
       const users = dataService.getUsers();
-      const projects = dataService.getProjects();
+      const projects = await dataService.getProjects();
       const applications = dataService.getApplications();
       const auditLogs = dataService.getAuditLogs();
       

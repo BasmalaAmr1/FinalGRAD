@@ -14,6 +14,7 @@ const uploadRoutes = require('./routes/upload');
 const userRoutes = require('./routes/users');
 const auditLogRoutes = require('./routes/auditLogs');
 const notificationRoutes = require('./routes/notifications');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Import file upload middleware
 const multer = require('multer');
@@ -66,29 +67,63 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Database connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/findoor', {
-    useNewUrlParser: true,
-    useUnifiedTopology: true
+// Database connection - MongoDB only (no fallback)
+const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/housing_system';
+
+// Connect to MongoDB with proper error handling
+mongoose.connect(mongoUri, {
+    serverSelectionTimeoutMS: 10000, // Timeout after 10s
 })
 .then(() => {
-    console.log('✅ Connected to MongoDB database');
+    console.log('Connected to MongoDB database');
+    console.log(` Database: ${mongoose.connection.name}`);
 })
 .catch((error) => {
-    console.error('❌ Database connection error:', error);
+    console.error(' MongoDB connection failed:', error.message);
+    console.error(' Please ensure MongoDB is running and accessible');
+    process.exit(1); // Exit if MongoDB connection fails
+});
+
+// Handle MongoDB connection events
+mongoose.connection.on('error', (error) => {
+    console.error(' MongoDB connection error:', error);
+    process.exit(1);
+});
+
+mongoose.connection.on('disconnected', () => {
+    console.log(' MongoDB disconnected');
+    process.exit(1);
+});
+
+mongoose.connection.on('reconnected', () => {
+    console.log(' MongoDB reconnected');
 });
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Routes
+// Routes - Using MongoDB controllers
 app.use('/api/applications', applicationRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/upload', uploadRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/auditLogs', auditLogRoutes);
-app.use('/api/notifications', notificationRoutes);
+app.use('/api/users', require('./routes/users-new')); // MongoDB users route
+app.use('/api/auditLogs', require('./routes/auditLogs-mongodb')); // MongoDB audit logs
+app.use('/api/notifications', require('./routes/notifications-mongodb')); // MongoDB notifications
+app.use('/api/dashboard', dashboardRoutes);
+
+// MongoDB Test Routes (for testing without removing originals)
+const applicationRoutesMongo = require('./routes/applications-mongodb');
+const projectRoutesMongo = require('./routes/projects-mongodb');
+const userRoutesMongo = require('./routes/users-mongodb');
+const auditLogRoutesMongo = require('./routes/auditLogs-mongodb');
+const notificationRoutesMongo = require('./routes/notifications-mongodb');
+
+app.use('/api/applications-mongodb', applicationRoutesMongo);
+app.use('/api/projects-mongodb', projectRoutesMongo);
+app.use('/api/users-mongodb', userRoutesMongo);
+app.use('/api/auditLogs-mongodb', auditLogRoutesMongo);
+app.use('/api/notifications-mongodb', notificationRoutesMongo);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -160,9 +195,9 @@ app.use('*', (req, res) => {
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 Findoor Backend Server running on port ${5000}`);
-    console.log(`📡 API Base URL: http://localhost:${5000}/api`);
-    console.log(`🏥 Health Check: http://localhost:${5000}/api/health`);
+    console.log(` Findoor Backend Server running on port ${PORT}`);
+    console.log(`API Base URL: http://localhost:${PORT}/api`);
+    console.log(` Health Check: http://localhost:${PORT}/api/health`);
 });
 
 module.exports = app;

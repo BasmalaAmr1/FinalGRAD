@@ -15,6 +15,11 @@ const apiCall = async (url, options = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
+      console.error('API Error Response:', data);
+      if (data.errors && Array.isArray(data.errors)) {
+        const errorMessages = data.errors.map(err => err.msg).join(', ');
+        throw new Error(errorMessages || data.message || 'API request failed');
+      }
       throw new Error(data.message || 'API request failed');
     }
 
@@ -47,6 +52,21 @@ export const applicationsAPI = {
     });
   },
 
+  // Update application (general update)
+  update: async (id, updateData) => {
+    return apiCall(`/applications/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updateData),
+    });
+  },
+
+  // Delete application
+  delete: async (id) => {
+    return apiCall(`/applications/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   // Get application statistics
   getStats: async () => {
     return apiCall('/applications/stats');
@@ -54,10 +74,118 @@ export const applicationsAPI = {
 
   // Create new application
   create: async (applicationData) => {
+    console.log('🔍 Creating application at endpoint: /applications');
+    console.log('🔍 Application data being sent:', JSON.stringify(applicationData, null, 2));
     return apiCall('/applications', {
       method: 'POST',
       body: JSON.stringify(applicationData),
     });
+  },
+};
+
+// Projects API
+export const projectsAPI = {
+  // Get all projects
+  getAll: async () => {
+    return apiCall('/projects');
+  },
+
+  // Get single project by ID
+  getById: async (id) => {
+    return apiCall(`/projects/${id}`);
+  },
+
+  // Create new project
+  create: async (projectData) => {
+    return apiCall('/projects', {
+      method: 'POST',
+      body: JSON.stringify(projectData),
+    });
+  },
+
+  // Update project
+  update: async (id, projectData) => {
+    return apiCall(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(projectData),
+    });
+  },
+
+  // Delete project
+  delete: async (id) => {
+    return apiCall(`/projects/${id}`, {
+      method: 'DELETE',
+    });
+  },
+};
+
+// Users API
+export const usersAPI = {
+  // Get all users
+  getAll: async () => {
+    return apiCall('/users');
+  },
+
+  // Get single user by ID
+  getById: async (id) => {
+    return apiCall(`/users/${id}`);
+  },
+
+  // Create new user
+  create: async (userData) => {
+    return apiCall('/users', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  },
+
+  // Update user
+  update: async (id, userData) => {
+    return apiCall(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  },
+};
+
+// Audit Logs API
+export const auditLogsAPI = {
+  // Get all audit logs
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const url = queryString ? `/auditLogs?${queryString}` : '/auditLogs';
+    return apiCall(url);
+  },
+
+  // Create audit log
+  create: async (logData) => {
+    return apiCall('/auditLogs', {
+      method: 'POST',
+      body: JSON.stringify(logData),
+    });
+  },
+};
+
+// Dashboard API
+export const dashboardAPI = {
+  // Get dashboard metrics
+  getMetrics: async () => {
+    return apiCall('/dashboard/metrics');
+  },
+
+  // Get dashboard insights
+  getInsights: async () => {
+    return apiCall('/dashboard/insights');
+  },
+
+  // Get application trends
+  getTrends: async () => {
+    return apiCall('/dashboard/trends');
+  },
+
+  // Get system health
+  getHealth: async () => {
+    return apiCall('/dashboard/health');
   },
 };
 

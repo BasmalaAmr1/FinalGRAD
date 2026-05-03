@@ -44,7 +44,7 @@ const validateProject = [
 
 // Routes
 router.get('/', projectController.getAllProjects);
-router.get('/:id', projectController.getProject);
+router.get('/:id', projectController.getProjectById);
 router.post('/', validateProject, projectController.createProject);
 router.put('/:id', validateProject, projectController.updateProject);
 router.delete('/:id', projectController.deleteProject);

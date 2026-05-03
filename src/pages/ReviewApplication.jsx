@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import dataService from '../services/dataService';
+import { applicationsAPI, projectsAPI } from '../services/apiService';
 
 // Format date helper function
 const formatDate = (dateString) => {
@@ -29,8 +29,37 @@ const ReviewApplication = () => {
     const loadApplication = async () => {
       try {
         setLoading(true);
-        const appData = dataService.getApplicationById(id);
-        setApplication(appData);
+        
+        // Fetch both application and projects data
+        const [applicationResponse, projectsResponse] = await Promise.all([
+          applicationsAPI.getById(id),
+          projectsAPI.getAll()
+        ]);
+        
+        const appData = applicationResponse.data;
+        const projectsData = projectsResponse.data || [];
+        
+        // Enrich application with project information
+        if (appData) {
+          const project = projectsData.find(p => p._id === appData.projectId || p.id === appData.projectId);
+          
+          const enrichedApplication = {
+            ...appData,
+            id: appData._id || appData.id,
+            projectName: appData.projectName || (project ? project.name : 'Unknown Project'),
+            applicantName: appData.applicantName || appData.name || 'Unknown User',
+            submittedDate: appData.createdAt || appData.submittedDate || new Date().toISOString(),
+            // Include unit type, preferred floor, and payment method with defaults
+            requestedUnitType: appData.requestedUnitType || '2BR',
+            preferredFloor: appData.preferredFloor || 'Any',
+            paymentMethod: appData.paymentMethod || 'installments'
+          };
+          
+          console.log('🔍 Enriched application data:', enrichedApplication);
+          setApplication(enrichedApplication);
+        } else {
+          setUpdateError('Application not found');
+        }
       } catch (err) {
         console.error('Error loading application:', err);
         setUpdateError('Failed to load application');
@@ -48,7 +77,7 @@ const ReviewApplication = () => {
       setUpdateLoading(true);
       setUpdateError('');
       
-      dataService.updateApplicationStatus(id, 'approved');
+      await applicationsAPI.update(id, { status: 'approved' });
       setSuccessMessage('Application approved successfully!');
       
       // Update local state
@@ -73,7 +102,7 @@ const ReviewApplication = () => {
       setUpdateLoading(true);
       setUpdateError('');
       
-      dataService.updateApplicationStatus(id, 'rejected', rejectReason);
+      await applicationsAPI.update(id, { status: 'rejected', rejectionReason: rejectReason });
       setSuccessMessage('Application rejected successfully!');
       setShowRejectReason(false);
       
